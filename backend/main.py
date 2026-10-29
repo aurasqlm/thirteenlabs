@@ -55,6 +55,109 @@ FALLBACK_VOICES = {
     "ar-SA": {"Female": "ar-SA-ZariyahNeural", "Male": "ar-SA-HamedNeural", "Default": "ar-SA-HamedNeural"},
 }
 
+def adjust_pct(base_str: str, delta_int: int) -> str:
+    try:
+        val = int(base_str.replace('%', '').replace('+', ''))
+    except Exception:
+        val = 0
+    total = max(-50, min(100, val + delta_int))
+    return f"+{total}%" if total >= 0 else f"{total}%"
+
+def adjust_hz(base_str: str, delta_int: int) -> str:
+    try:
+        val = int(base_str.replace('Hz', '').replace('+', ''))
+    except Exception:
+        val = 0
+    total = max(-50, min(50, val + delta_int))
+    return f"+{total}Hz" if total >= 0 else f"{total}Hz"
+
+def format_whisper_text(text: str) -> str:
+    words = text.split()
+    if len(words) <= 4:
+        return '... hhh ... ' + ' ... '.join(words) + ' ...'
+    return '... hhh ... ' + ' '.join(words) + ' ...'
+
+def parse_emotion_segments(raw_text: str):
+    tag_pattern = re.compile(r'\[([a-zA-Z0-9_.:\- ]+)\]')
+    parts = tag_pattern.split(raw_text)
+
+    segments = []
+    current_emotion = 'normal'
+    pending_pause = 0
+
+    INTERJECTIONS = {
+        'laugh': 'haha!',
+        'chuckle': 'heh, heh...',
+        'giggle': 'tee-hee!',
+        'snicker': 'snicker...',
+        'cackle': 'bwahaha!',
+        'aha': 'aha!',
+        'cheer': 'hooray!',
+        'sigh': '... haaah ...',
+        'gasp': '... *gasp* ...',
+        'cough': '... *cough* ...',
+        'throat-clear': '... ahem ...',
+        'yawn': '... aaah ...',
+        'shiver': '... brrr ...',
+    }
+
+    for i in range(len(parts)):
+        part = parts[i]
+        if i % 2 == 1:
+            tag = part.strip().lower()
+            if 'pause' in tag:
+                match = re.search(r'([0-9.]+)\s*s?', tag)
+                if match:
+                    pending_pause += int(float(match.group(1)) * 1000)
+                elif 'dramatic' in tag:
+                    pending_pause += 1200
+                else:
+                    pending_pause += 500
+            elif any(tag.startswith(k) for k in INTERJECTIONS):
+                matched_k = next(k for k in INTERJECTIONS if tag.startswith(k))
+                segments.append({
+                    'text': INTERJECTIONS[matched_k],
+                    'emotion': matched_k,
+                    'pause_before_ms': pending_pause + 150
+                })
+                pending_pause = 150
+            elif any(w in tag for w in ['whisper', 'secretive', 'faint', 'aspiration', 'intimate']):
+                current_emotion = 'whisper'
+            elif any(w in tag for w in ['shout', 'yell', 'scream', 'battle', 'commanding']):
+                current_emotion = 'shout'
+            elif any(w in tag for w in ['sad', 'crying', 'grieving', 'melancholy', 'tearful']):
+                current_emotion = 'sad'
+            elif any(w in tag for w in ['angry', 'furious', 'seething', 'growl', 'snarl']):
+                current_emotion = 'angry'
+            elif any(w in tag for w in ['nervous', 'tremble', 'stammer', 'shaky']):
+                current_emotion = 'nervous'
+            elif any(w in tag for w in ['robot', 'dsp:robot']):
+                current_emotion = 'robot'
+            elif any(w in tag for w in ['radio', 'walkie', 'telephone']):
+                current_emotion = 'radio'
+            elif any(w in tag for w in ['slow', 'tempo:slow-down', 'deliberate']):
+                current_emotion = 'slow'
+            elif any(w in tag for w in ['fast', 'tempo:speed-up', 'rushed']):
+                current_emotion = 'fast'
+            elif any(w in tag for w in ['excited', 'bubbly', 'thrilled']):
+                current_emotion = 'excited'
+            elif any(w in tag for w in ['mysterious', 'cryptic', 'haunting']):
+                current_emotion = 'mysterious'
+        else:
+            text = part.strip()
+            if text:
+                segments.append({
+                    'text': text,
+                    'emotion': current_emotion,
+                    'pause_before_ms': pending_pause
+                })
+                pending_pause = 0
+
+    if pending_pause > 0 and segments:
+        segments[-1]['pause_after_ms'] = pending_pause
+
+    return segments
+
 async def ensure_valid_voices():
     global VALID_EDGE_VOICES
     if not VALID_EDGE_VOICES:
@@ -159,64 +262,151 @@ async def list_voices():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+async def synthesize_single_segment(text: str, voice: str, rate: str, pitch: str, volume: str) -> AudioSegment:
+    comm = edge_tts.Communicate(text=text, voice=voice, rate=rate, pitch=pitch, volume=volume)
+    buf = io.BytesIO()
+    async for chunk in comm.stream():
+        if chunk["type"] == "audio":
+            buf.write(chunk["data"])
+    buf.seek(0)
+    return AudioSegment.from_file(buf, format="mp3")
+
 async def process_speech_generation(req: GenerateRequest):
     await ensure_valid_voices()
-    clean_prompt = preprocess_text(req.text)
-    if not clean_prompt:
-        clean_prompt = req.text
-
     safe_voice = resolve_voice_id(req.voice)
+    segments = parse_emotion_segments(req.text)
+
+    if not segments:
+        clean_text = preprocess_text(req.text) or req.text
+        segments = [{"text": clean_text, "emotion": "normal", "pause_before_ms": 0}]
 
     try:
-        communicate = edge_tts.Communicate(
-            text=clean_prompt,
-            voice=safe_voice,
-            rate=req.rate,
-            pitch=req.pitch,
-            volume=req.volume
-        )
+        # Fast path for single standard segment with no emotion modifications
+        if len(segments) == 1 and segments[0]["emotion"] == "normal" and segments[0].get("pause_before_ms", 0) == 0:
+            sound = await synthesize_single_segment(
+                text=segments[0]["text"],
+                voice=safe_voice,
+                rate=req.rate,
+                pitch=req.pitch,
+                volume=req.volume
+            )
+        else:
+            # Multi-segment acoustic & DSP emotion synthesis
+            master = AudioSegment.empty()
+            for seg in segments:
+                emo = seg["emotion"]
+                txt = seg["text"]
+                rate = req.rate
+                pitch = req.pitch
+                vol = req.volume
+                dsp = None
 
-        mp3_buffer = io.BytesIO()
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                mp3_buffer.write(chunk["data"])
+                if emo == "whisper":
+                    txt = format_whisper_text(txt)
+                    rate = adjust_pct(req.rate, -25)
+                    pitch = adjust_hz(req.pitch, -14)
+                    vol = adjust_pct(req.volume, -50)
+                    dsp = "whisper"
+                elif emo == "shout":
+                    txt = txt.upper() + ("!" if not txt.endswith("!") else "")
+                    rate = adjust_pct(req.rate, 12)
+                    pitch = adjust_hz(req.pitch, 28)
+                    vol = adjust_pct(req.volume, 40)
+                    dsp = "shout"
+                elif emo == "sad":
+                    txt = "... " + txt + " ..."
+                    rate = adjust_pct(req.rate, -20)
+                    pitch = adjust_hz(req.pitch, -16)
+                    vol = adjust_pct(req.volume, -15)
+                    dsp = "sad"
+                elif emo == "angry":
+                    txt = txt + ("!" if not txt.endswith("!") else "")
+                    rate = adjust_pct(req.rate, 10)
+                    pitch = adjust_hz(req.pitch, -10)
+                    vol = adjust_pct(req.volume, 25)
+                elif emo == "nervous":
+                    words = txt.split()
+                    if words:
+                        words[0] = f"{words[0][:2]}-{words[0]}..."
+                    txt = " ".join(words)
+                    rate = adjust_pct(req.rate, 18)
+                    pitch = adjust_hz(req.pitch, 14)
+                elif emo == "robot":
+                    rate = adjust_pct(req.rate, -10)
+                    pitch = adjust_hz(req.pitch, -6)
+                    dsp = "robot"
+                elif emo == "radio":
+                    dsp = "radio"
+                elif emo == "slow":
+                    rate = adjust_pct(req.rate, -30)
+                elif emo == "fast":
+                    rate = adjust_pct(req.rate, 35)
+                elif emo == "excited":
+                    rate = adjust_pct(req.rate, 22)
+                    pitch = adjust_hz(req.pitch, 24)
+                    vol = adjust_pct(req.volume, 15)
+                elif emo == "mysterious":
+                    rate = adjust_pct(req.rate, -25)
+                    pitch = adjust_hz(req.pitch, -16)
+                    vol = adjust_pct(req.volume, -20)
 
-        mp3_buffer.seek(0)
-        raw_mp3_data = mp3_buffer.getvalue()
+                seg_audio = await synthesize_single_segment(
+                    text=txt,
+                    voice=safe_voice,
+                    rate=rate,
+                    pitch=pitch,
+                    volume=vol
+                )
 
-        if req.format == "mp3":
-            return Response(content=raw_mp3_data, media_type="audio/mpeg", headers={
+                if dsp == "whisper":
+                    seg_audio = seg_audio.high_pass_filter(380).low_pass_filter(6000) - 4
+                elif dsp == "shout":
+                    seg_audio = seg_audio + 2
+                elif dsp == "sad":
+                    seg_audio = seg_audio.low_pass_filter(4600)
+                elif dsp == "radio":
+                    seg_audio = seg_audio.high_pass_filter(400).low_pass_filter(3200) + 3
+
+                pause_before = seg.get("pause_before_ms", 0)
+                if pause_before > 0:
+                    master += AudioSegment.silent(duration=pause_before)
+                elif len(master) > 0 and emo == "whisper":
+                    master += AudioSegment.silent(duration=250)
+
+                master += seg_audio
+
+                if seg.get("pause_after_ms", 0) > 0:
+                    master += AudioSegment.silent(duration=seg["pause_after_ms"])
+
+            sound = master
+
+        # Transcode to requested format
+        out_buf = io.BytesIO()
+        if req.format == "wav":
+            sound.export(out_buf, format="wav")
+            return Response(content=out_buf.getvalue(), media_type="audio/wav", headers={
+                "Content-Disposition": 'attachment; filename="thirteenlabs-audio.wav"'
+            })
+        elif req.format == "flac":
+            sound.export(out_buf, format="flac")
+            return Response(content=out_buf.getvalue(), media_type="audio/flac", headers={
+                "Content-Disposition": 'attachment; filename="thirteenlabs-audio.flac"'
+            })
+        elif req.format == "ogg":
+            sound.export(out_buf, format="ogg")
+            return Response(content=out_buf.getvalue(), media_type="audio/ogg", headers={
+                "Content-Disposition": 'attachment; filename="thirteenlabs-audio.ogg"'
+            })
+        elif req.format == "aac":
+            sound.export(out_buf, format="adts")
+            return Response(content=out_buf.getvalue(), media_type="audio/aac", headers={
+                "Content-Disposition": 'attachment; filename="thirteenlabs-audio.aac"'
+            })
+        else:
+            sound.export(out_buf, format="mp3")
+            return Response(content=out_buf.getvalue(), media_type="audio/mpeg", headers={
                 "Content-Disposition": 'attachment; filename="thirteenlabs-audio.mp3"'
             })
-
-        # Transcode to WAV, FLAC, OGG, or AAC using pydub
-        try:
-            sound = AudioSegment.from_file(io.BytesIO(raw_mp3_data), format="mp3")
-            out_buf = io.BytesIO()
-
-            if req.format == "wav":
-                sound.export(out_buf, format="wav")
-                return Response(content=out_buf.getvalue(), media_type="audio/wav", headers={
-                    "Content-Disposition": 'attachment; filename="thirteenlabs-audio.wav"'
-                })
-            elif req.format == "flac":
-                sound.export(out_buf, format="flac")
-                return Response(content=out_buf.getvalue(), media_type="audio/flac", headers={
-                    "Content-Disposition": 'attachment; filename="thirteenlabs-audio.flac"'
-                })
-            elif req.format == "ogg":
-                sound.export(out_buf, format="ogg")
-                return Response(content=out_buf.getvalue(), media_type="audio/ogg", headers={
-                    "Content-Disposition": 'attachment; filename="thirteenlabs-audio.ogg"'
-                })
-            elif req.format == "aac":
-                sound.export(out_buf, format="adts")
-                return Response(content=out_buf.getvalue(), media_type="audio/aac", headers={
-                    "Content-Disposition": 'attachment; filename="thirteenlabs-audio.aac"'
-                })
-        except Exception:
-            # Fallback to MP3 if ffmpeg is missing in lightweight runtime
-            return Response(content=raw_mp3_data, media_type="audio/mpeg")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")

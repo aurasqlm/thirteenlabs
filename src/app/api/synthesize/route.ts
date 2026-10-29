@@ -62,11 +62,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Text prompt is required' }, { status: 400 });
     }
 
-    // Clean emotion tags for acoustic generation while respecting punctuation
+    // Format emotion tags for acoustic generation while respecting human prosody
     const cleanedText = text
-      .replace(/\[(?:cough|throat-clear|gasp|sigh|yawn|snort|wheeze)[^\]]*\]/gi, ' ... ')
+      .replace(/\[(?:cough|throat-clear|snort|wheeze)[^\]]*\]/gi, ' ... ')
+      .replace(/\[(?:sigh)[^\]]*\]/gi, ' ... haaah ... ')
+      .replace(/\[(?:gasp)[^\]]*\]/gi, ' ... ah! ... ')
       .replace(/\[(?:laugh|giggle|snicker|chuckle|cackle|smirk)[^\]]*\]/gi, ' haha! ')
-      .replace(/\[(?:whisper)[^\]]*\]/gi, ' ')
+      .replace(/\[(?:whisper|secretive|faint)[^\]]*\]/gi, ' ... hhh ... ')
       .replace(/\[(?:shout|yell|cheer)[^\]]*\]/gi, '! ')
       .replace(/\[pause\s*([0-9.]+)s?\]/gi, ' ... ')
       .replace(/\[.*?\]/g, '')
@@ -75,48 +77,46 @@ export async function POST(req: NextRequest) {
 
     const textToSynthesize = cleanedText || text;
 
-    // Check if external Python FastAPI backend is provided
-    const pythonBackendUrl = process.env.PYTHON_BACKEND_URL;
-    if (pythonBackendUrl) {
-      try {
-        const rateParam = rate >= 1.0 ? `+${Math.round((rate - 1.0) * 100)}%` : `-${Math.round((1.0 - rate) * 100)}%`;
-        const pitchParam = pitch >= 1.0 ? `+${Math.round((pitch - 1.0) * 50)}Hz` : `-${Math.round((1.0 - pitch) * 50)}Hz`;
+    // Connect to Python FastAPI neural engine (defaults to localhost:8000)
+    const pythonBackendUrl = process.env.PYTHON_BACKEND_URL || 'http://127.0.0.1:8000';
+    try {
+      const rateParam = rate >= 1.0 ? `+${Math.round((rate - 1.0) * 100)}%` : `-${Math.round((1.0 - rate) * 100)}%`;
+      const pitchParam = pitch >= 1.0 ? `+${Math.round((pitch - 1.0) * 50)}Hz` : `-${Math.round((1.0 - pitch) * 50)}Hz`;
 
-        const backendRes = await fetch(`${pythonBackendUrl}/api/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: textToSynthesize,
-            voice,
-            rate: rateParam,
-            pitch: pitchParam,
-            volume: '+0%',
-            format,
-            stability,
-            similarity,
-          }),
-          signal: AbortSignal.timeout(60000), // 60s timeout for long generations
+      const backendRes = await fetch(`${pythonBackendUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text, // Pass original text with emotion tags intact to Python Neural Engine!
+          voice,
+          rate: rateParam,
+          pitch: pitchParam,
+          volume: '+0%',
+          format,
+          stability,
+          similarity,
+        }),
+        signal: AbortSignal.timeout(60000), // 60s timeout for multi-segment generation
+      });
+
+      if (backendRes.ok) {
+        const audioBuffer = await backendRes.arrayBuffer();
+        const contentType =
+          format === 'wav' ? 'audio/wav' :
+          format === 'flac' ? 'audio/flac' :
+          format === 'ogg' ? 'audio/ogg' :
+          format === 'aac' ? 'audio/aac' : 'audio/mpeg';
+
+        return new Response(audioBuffer, {
+          headers: {
+            'Content-Type': contentType,
+            'Content-Disposition': `attachment; filename="thirteenlabs-${Date.now()}.${format}"`,
+            'X-Engine': 'ThirteenLabs-Python-Neural',
+          },
         });
-
-        if (backendRes.ok) {
-          const audioBuffer = await backendRes.arrayBuffer();
-          const contentType =
-            format === 'wav' ? 'audio/wav' :
-            format === 'flac' ? 'audio/flac' :
-            format === 'ogg' ? 'audio/ogg' :
-            format === 'aac' ? 'audio/aac' : 'audio/mpeg';
-
-          return new Response(audioBuffer, {
-            headers: {
-              'Content-Type': contentType,
-              'Content-Disposition': `attachment; filename="thirteenlabs-${Date.now()}.${format}"`,
-              'X-Engine': 'ThirteenLabs-Python-FastAPI',
-            },
-          });
-        }
-      } catch (e) {
-        console.warn('Python backend unavailable, falling back to direct edge synthesizer', e);
       }
+    } catch (e) {
+      console.warn('Python backend unavailable, falling back to direct edge synthesizer', e);
     }
 
     // Direct High-Reliability Neural Endpoint with Concurrent Sentence Chunking (<170 chars per chunk)
