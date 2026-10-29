@@ -56,17 +56,28 @@ FALLBACK_VOICES = {
 async def ensure_valid_voices():
     global VALID_EDGE_VOICES
     if not VALID_EDGE_VOICES:
-        try:
-            voices = await edge_tts.list_voices()
-            VALID_EDGE_VOICES = {v["ShortName"] for v in voices}
-        except Exception:
-            VALID_EDGE_VOICES = {
-                "en-US-AndrewMultilingualNeural", "en-US-AvaMultilingualNeural",
-                "en-US-BrianMultilingualNeural", "en-US-EmmaMultilingualNeural",
-                "en-US-JennyNeural", "en-US-GuyNeural", "en-GB-RyanNeural",
-                "en-GB-SoniaNeural", "es-ES-AlvaroNeural", "fr-FR-HenriNeural",
-                "de-DE-ConradNeural", "ja-JP-KeitaNeural", "zh-CN-YunxiNeural"
-            }
+        # Load pre-bundled 322 authentic edge voices first for 0ms startup
+        json_path = os.path.join(os.path.dirname(__file__), "..", "src", "lib", "edgeVoices.json")
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    VALID_EDGE_VOICES = {v["ShortName"] for v in data if "ShortName" in v}
+            except Exception:
+                pass
+
+        if not VALID_EDGE_VOICES:
+            try:
+                voices = await edge_tts.list_voices()
+                VALID_EDGE_VOICES = {v["ShortName"] for v in voices}
+            except Exception:
+                VALID_EDGE_VOICES = {
+                    "en-US-AndrewMultilingualNeural", "en-US-AvaMultilingualNeural",
+                    "en-US-BrianMultilingualNeural", "en-US-EmmaMultilingualNeural",
+                    "en-US-JennyNeural", "en-US-GuyNeural", "en-GB-RyanNeural",
+                    "en-GB-SoniaNeural", "es-ES-AlvaroNeural", "fr-FR-HenriNeural",
+                    "de-DE-ConradNeural", "ja-JP-KeitaNeural", "zh-CN-YunxiNeural"
+                }
 
 def resolve_voice_id(requested_voice: str) -> str:
     """Safely maps any requested voice ID to a guaranteed valid Edge-TTS voice."""
@@ -78,16 +89,29 @@ def resolve_voice_id(requested_voice: str) -> str:
         if v.lower() == requested_voice.lower():
             return v
 
-    # Parse locale from string (e.g. voice-en-US-leo -> en-US)
+    # Parse locale from string (e.g. voice-en-US-leo -> en-US or voice-pt-BR-...)
     locale_match = re.search(r'([a-z]{2}-[A-Z]{2})', requested_voice, re.IGNORECASE)
     if locale_match:
-        locale = locale_match.group(1).upper()
-        # normalize
+        locale = locale_match.group(1)
         parts = locale.split('-')
         norm_locale = f"{parts[0].lower()}-{parts[1].upper()}"
+        is_female = "female" in requested_voice.lower() or "girl" in requested_voice.lower()
+
+        # 1. Check explicit fallback table
         if norm_locale in FALLBACK_VOICES:
-            gender = "Female" if "female" in requested_voice.lower() or "girl" in requested_voice.lower() else "Male"
+            gender = "Female" if is_female else "Male"
             return FALLBACK_VOICES[norm_locale].get(gender, FALLBACK_VOICES[norm_locale]["Default"])
+
+        # 2. Dynamically match against all valid Edge voices for this exact locale
+        matching = [v for v in VALID_EDGE_VOICES if v.lower().startswith(norm_locale.lower())]
+        if matching:
+            return matching[0]
+
+        # 3. Match by primary language code prefix (e.g. "pt", "it", "ru", "tr")
+        lang_code = parts[0].lower()
+        matching_lang = [v for v in VALID_EDGE_VOICES if v.lower().startswith(f"{lang_code}-")]
+        if matching_lang:
+            return matching_lang[0]
 
     return "en-US-AndrewMultilingualNeural"
 

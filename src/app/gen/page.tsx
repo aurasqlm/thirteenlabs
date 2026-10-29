@@ -27,7 +27,7 @@ import AudioHistoryDrawer from '@/components/AudioHistoryDrawer';
 import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal';
 import { CURATED_VOICES, SCRIPT_PRESETS, ALL_EMOTION_TAGS } from '@/lib/constants';
 import { VoiceModel, AudioFormat, GeneratedAudioItem } from '@/types';
-import { triggerDownload, audioBufferToWav, stripEmotionTags } from '@/lib/audioEngine';
+import { downloadFormattedAudio, triggerDownload, audioBufferToWav, stripEmotionTags } from '@/lib/audioEngine';
 import {
   loadAudioHistoryFromStorage,
   saveAudioToStorage,
@@ -178,7 +178,7 @@ export default function GenStudioPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text,
-          voice: selectedVoice.id,
+          voice: selectedVoice.edgeVoiceId || selectedVoice.id,
           rate: speed,
           pitch: pitch,
           format: downloadFormat,
@@ -194,7 +194,6 @@ export default function GenStudioPage() {
           } catch (_) {}
         }
         setCurrentAudioUrl(url);
-        setPlayNonce((prev) => prev + 1);
 
         const newItem: GeneratedAudioItem = {
           id: Date.now().toString(),
@@ -248,11 +247,10 @@ export default function GenStudioPage() {
     }
   };
 
-  // Download audio in selected format
+  // Download audio in selected format with authentic PCM/format transcoding
   const handleDownload = () => {
     if (!currentAudioUrl) return;
-    const filename = `thirteenlabs-${Date.now()}.${downloadFormat}`;
-    triggerDownload(currentAudioUrl, filename);
+    downloadFormattedAudio(currentAudioUrl, downloadFormat, `thirteenlabs-${Date.now()}`);
   };
 
   // Immediate Stop for all playing audio and speech synthesis
@@ -286,7 +284,9 @@ export default function GenStudioPage() {
                 key={preset.id}
                 onClick={() => {
                   setText(preset.text);
-                  const matched = CURATED_VOICES.find((v) => v.id === preset.suggestedVoiceId);
+                  const matched = CURATED_VOICES.find(
+                    (v) => v.id === preset.suggestedVoiceId || v.edgeVoiceId === preset.suggestedVoiceId
+                  );
                   if (matched) setSelectedVoice(matched);
                 }}
                 className="rounded-full border border-studio-border bg-studio-white px-3 py-1 text-xs font-normal text-studio-subtle shadow-studio-tight transition-all duration-100 ease-studio-squash hover:-translate-y-0.5 hover:border-studio-borderHover hover:bg-studio-hover hover:text-studio-obsidian hover:shadow-studio-chip active:scale-[0.98]"
@@ -592,8 +592,11 @@ export default function GenStudioPage() {
         onClose={() => setIsHistoryDrawerOpen(false)}
         history={history}
         onPlayItem={(item) => {
-          setCurrentAudioUrl(item.audioUrl);
-          setPlayNonce((prev) => prev + 1);
+          if (item.audioUrl === currentAudioUrl) {
+            setPlayNonce((prev) => prev + 1);
+          } else {
+            setCurrentAudioUrl(item.audioUrl);
+          }
         }}
         onRestoreText={(restored) => setText(restored)}
         onClearHistory={async () => {

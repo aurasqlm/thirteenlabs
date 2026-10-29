@@ -78,9 +78,13 @@ export async function loadAudioHistoryFromStorage(): Promise<GeneratedAudioItem[
         records.sort((a, b) => b.timestamp - a.timestamp);
 
         const items: GeneratedAudioItem[] = records.map((rec) => {
-          const blob = new Blob([rec.audioData], {
-            type: rec.format === 'wav' ? 'audio/wav' : 'audio/mpeg',
-          });
+          const mimeType =
+            rec.format === 'wav' ? 'audio/wav' :
+            rec.format === 'flac' ? 'audio/flac' :
+            rec.format === 'ogg' ? 'audio/ogg' :
+            rec.format === 'aac' ? 'audio/aac' : 'audio/mpeg';
+
+          const blob = new Blob([rec.audioData], { type: mimeType });
           const url = URL.createObjectURL(blob);
           return {
             id: rec.id,

@@ -2,6 +2,7 @@ export type AudioFormat = 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac';
 
 export interface VoiceModel {
   id: string;
+  edgeVoiceId?: string;
   name: string;
   provider: string;
   gender: 'Female' | 'Male' | 'Neutral';

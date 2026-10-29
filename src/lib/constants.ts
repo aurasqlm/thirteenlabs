@@ -266,8 +266,11 @@ export const CURATED_VOICES: VoiceModel[] = (() => {
         (arch.gender === 'Female' ? 'en-US-JennyNeural' : 'en-US-GuyNeural');
 
       const fullName = `${arch.name} (${reg.lang.split(' ')[0]} ${arch.ageGroup})`;
+      const uniqueId = `voice-${reg.code}-${arch.name.toLowerCase()}-${idCounter++}`;
+
       list.push({
-        id: realVoiceId,
+        id: uniqueId,
+        edgeVoiceId: realVoiceId,
         name: fullName,
         provider: reg.provider,
         gender: arch.gender,

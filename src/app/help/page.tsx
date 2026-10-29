@@ -315,11 +315,13 @@ cd thirteenlabs
 # 2. Install dependencies
 npm install
 
-# 3. Test production build locally
-npm run build
+# 3. Deploy to Cloudflare Pages via @cloudflare/next-on-pages
+npx @cloudflare/next-on-pages
+npx wrangler pages deploy .vercel/output/static --project-name thirteenlabs
 
-# 4. Deploy to Cloudflare Pages & bind custom domain thirteenlabs.bond
-npx wrangler pages deploy .next/standalone --project-name thirteenlabs`}
+# 4. Optional: Self-host with Docker / Node server
+npm run build
+npm start -- -p 3000`}
               </pre>
 
               <div className="border-t border-studio-borderSoft pt-4">

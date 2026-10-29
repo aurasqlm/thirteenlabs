@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
   reactStrictMode: true,
   // Configure headers for Audio / SharedArrayBuffer if needed
   async headers() {

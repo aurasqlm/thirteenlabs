@@ -5,7 +5,7 @@
   "compatibility_flags": [
     "nodejs_compat"
   ],
-  "pages_build_output_dir": ".next/standalone",
+  "pages_build_output_dir": ".vercel/output/static",
   "vars": {
     "APP_NAME": "ThirteenLabs",
     "APP_URL": "https://thirteenlabs.bond",
