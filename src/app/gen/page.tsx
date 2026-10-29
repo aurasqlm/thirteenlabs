@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Sparkles,
   Volume2,
@@ -27,8 +28,16 @@ import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal';
 import { CURATED_VOICES, SCRIPT_PRESETS, ALL_EMOTION_TAGS } from '@/lib/constants';
 import { VoiceModel, AudioFormat, GeneratedAudioItem } from '@/types';
 import { triggerDownload, audioBufferToWav, stripEmotionTags } from '@/lib/audioEngine';
+import {
+  loadAudioHistoryFromStorage,
+  saveAudioToStorage,
+  deleteAudioFromStorage,
+  clearAllAudioFromStorage,
+} from '@/lib/historyStorage';
 
 export default function GenStudioPage() {
+  const router = useRouter();
+
   // Script text state
   const [text, setText] = useState<string>(
     'Listen closely. [pause 0.5s] The decisions we make in this hour will define the trajectory of our entire industry. [aha] There is zero room for hesitation.'
@@ -49,6 +58,7 @@ export default function GenStudioPage() {
 
   // Active audio URL & state
   const [currentAudioUrl, setCurrentAudioUrl] = useState<string | null>(null);
+  const [playNonce, setPlayNonce] = useState<number>(0);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [copiedScript, setCopiedScript] = useState<boolean>(false);
 
@@ -62,32 +72,18 @@ export default function GenStudioPage() {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load history from localStorage on client mount
+  // Load history from durable IndexedDB on client mount
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem('thirteenlabs_history');
-        if (saved) {
-          setHistory(JSON.parse(saved));
-        }
-      } catch (e) {
-        console.warn('Failed to load local history', e);
+    let isMounted = true;
+    loadAudioHistoryFromStorage().then((items) => {
+      if (isMounted) {
+        setHistory(items);
       }
-    }
+    });
+    return () => {
+      isMounted = false;
+    };
   }, []);
-
-  // Save history to localStorage
-  const saveToHistory = (item: GeneratedAudioItem) => {
-    const updated = [item, ...history].slice(0, 50);
-    setHistory(updated);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('thirteenlabs_history', JSON.stringify(updated));
-      } catch (e) {
-        console.warn('Failed to persist history', e);
-      }
-    }
-  };
 
   // Keyboard shortcut listener
   useEffect(() => {
@@ -98,6 +94,18 @@ export default function GenStudioPage() {
       if (isCmdOrCtrl && (e.key === '?' || e.key === '/')) {
         e.preventDefault();
         setIsShortcutsModalOpen((prev) => !prev);
+      }
+
+      // Ctrl + 1 -> Switch to Studio (Gen)
+      if (isCmdOrCtrl && e.key === '1') {
+        e.preventDefault();
+        router.push('/gen');
+      }
+
+      // Ctrl + 2 -> Switch to Help Directory
+      if (isCmdOrCtrl && e.key === '2') {
+        e.preventDefault();
+        router.push('/help');
       }
 
       // Ctrl + Enter -> Trigger Generation
@@ -118,18 +126,25 @@ export default function GenStudioPage() {
         setIsHistoryDrawerOpen((prev) => !prev);
       }
 
-      // Ctrl + D -> Download Audio
+      // Ctrl + D -> Download Audio (Prevent browser bookmark popup unconditionally)
       if (isCmdOrCtrl && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
         if (currentAudioUrl) {
-          e.preventDefault();
           handleDownload();
         }
+      }
+
+      // Esc -> Close any active dialogs, modals, and drawers
+      if (e.key === 'Escape') {
+        setIsEmotionDrawerOpen(false);
+        setIsHistoryDrawerOpen(false);
+        setIsShortcutsModalOpen(false);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [text, selectedVoice, speed, pitch, stability, similarity, downloadFormat, currentAudioUrl]);
+  }, [router, text, selectedVoice, speed, pitch, stability, similarity, downloadFormat, currentAudioUrl]);
 
   // Insert emotion tag at cursor position
   const handleInsertTag = (tagCode: string) => {
@@ -173,7 +188,13 @@ export default function GenStudioPage() {
       if (response.ok) {
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
+        if (currentAudioUrl && currentAudioUrl.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(currentAudioUrl);
+          } catch (_) {}
+        }
         setCurrentAudioUrl(url);
+        setPlayNonce((prev) => prev + 1);
 
         const newItem: GeneratedAudioItem = {
           id: Date.now().toString(),
@@ -186,7 +207,8 @@ export default function GenStudioPage() {
           timestamp: Date.now(),
           settings: { speed, pitch, stability, similarity },
         };
-        saveToHistory(newItem);
+        await saveAudioToStorage(newItem, blob);
+        setHistory((prev) => [newItem, ...prev.filter((i) => i.id !== newItem.id)].slice(0, 50));
         setIsGenerating(false);
         return;
       }
@@ -548,6 +570,7 @@ export default function GenStudioPage() {
         <div className="mt-6">
           <WaveformVisualizer
             audioUrl={currentAudioUrl}
+            playNonce={playNonce}
             selectedFormat={downloadFormat}
             onChangeFormat={setDownloadFormat}
             onDownload={handleDownload}
@@ -568,11 +591,18 @@ export default function GenStudioPage() {
         isOpen={isHistoryDrawerOpen}
         onClose={() => setIsHistoryDrawerOpen(false)}
         history={history}
-        onPlayItem={(item) => setCurrentAudioUrl(item.audioUrl)}
+        onPlayItem={(item) => {
+          setCurrentAudioUrl(item.audioUrl);
+          setPlayNonce((prev) => prev + 1);
+        }}
         onRestoreText={(restored) => setText(restored)}
-        onClearHistory={() => {
+        onClearHistory={async () => {
+          await clearAllAudioFromStorage();
           setHistory([]);
-          if (typeof window !== 'undefined') localStorage.removeItem('thirteenlabs_history');
+        }}
+        onDeleteItem={async (id) => {
+          await deleteAudioFromStorage(id);
+          setHistory((prev) => prev.filter((item) => item.id !== id));
         }}
       />
 

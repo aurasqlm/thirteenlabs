@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Navigation from '@/components/Navigation';
 import Footer from '@/components/Footer';
 import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal';
@@ -22,9 +23,35 @@ import {
 } from 'lucide-react';
 
 export default function HelpDirectoryPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'emotions' | 'providers' | 'shortcuts' | 'deploy' | 'audio'>('emotions');
   const [searchQuery, setSearchQuery] = useState('');
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
+
+  // Global keyboard shortcuts on Help page
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+
+      if (isCmdOrCtrl && (e.key === '?' || e.key === '/')) {
+        e.preventDefault();
+        setIsShortcutsModalOpen((prev) => !prev);
+      }
+      if (isCmdOrCtrl && e.key === '1') {
+        e.preventDefault();
+        router.push('/gen');
+      }
+      if (isCmdOrCtrl && e.key === '2') {
+        e.preventDefault();
+        router.push('/help');
+      }
+      if (e.key === 'Escape') {
+        setIsShortcutsModalOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [router]);
 
   // Filter emotions in help directory
   const filteredTags = ALL_EMOTION_TAGS.filter(

@@ -131,8 +131,40 @@ const BASE_ANCHOR_VOICES: VoiceModel[] = [
 ];
 
 // Systematic Expansion to generate 1,200+ distinct real-world voices across 60+ providers and locales
+import rawEdgeVoices from './edgeVoices.json';
+
 export const CURATED_VOICES: VoiceModel[] = (() => {
   const list: VoiceModel[] = [...BASE_ANCHOR_VOICES];
+  const seenIds = new Set(list.map((v) => v.id));
+
+  // Build locale + gender lookup map for valid real Edge voice IDs
+  const edgeLocaleMap = new Map<string, string>();
+  for (const v of rawEdgeVoices) {
+    const key = `${v.locale}_${v.gender}`;
+    if (!edgeLocaleMap.has(key)) {
+      edgeLocaleMap.set(key, v.id);
+    }
+  }
+
+  // Add all 322 authentic Microsoft Edge Neural voices directly
+  for (const v of rawEdgeVoices) {
+    if (!seenIds.has(v.id)) {
+      seenIds.add(v.id);
+      const cleanName = v.shortName.split('-').pop()?.replace('Neural', '') || v.name;
+      list.push({
+        id: v.id,
+        name: `${cleanName} (${v.language.split(' ')[0]})`,
+        provider: 'Microsoft Edge Neural',
+        gender: v.gender as 'Female' | 'Male' | 'Neutral',
+        ageGroup: v.ageGroup as 'Child' | 'Young' | 'Mature' | 'Senior',
+        locale: v.locale,
+        language: v.language,
+        tag: `Official Edge Neural • ${v.language}`,
+        quality: 'Ultra',
+        sampleText: `Hi, I am ${cleanName} from ThirteenLabs.`,
+      });
+    }
+  }
 
   const REGIONS = [
     { code: 'en-US', lang: 'English (US)', provider: 'Microsoft Edge Neural' },
@@ -188,7 +220,7 @@ export const CURATED_VOICES: VoiceModel[] = (() => {
     { code: 'kokoro-core', lang: 'English (US Open)', provider: 'Kokoro-82M ONNX' },
     { code: 'piper-core', lang: 'English (Fast CPU)', provider: 'Piper Fast TTS' },
     { code: 'whisper-core', lang: 'Multilingual Diffusion', provider: 'WhisperSpeech Open' },
-    { code: 'gtts-core', lang: 'Global Dialect Hub', provider: 'Google Translate TTS' }
+    { code: 'gtts-core', lang: 'Global Dialect Hub', provider: 'Google Translate TTS' },
   ];
 
   const ARCHETYPES = [
@@ -220,16 +252,22 @@ export const CURATED_VOICES: VoiceModel[] = (() => {
     { name: 'Eleanor', ageGroup: 'Senior' as const, gender: 'Female' as const, tag: 'Loving Grandmother, Storyteller, Warm' },
     { name: 'Winston', ageGroup: 'Senior' as const, gender: 'Male' as const, tag: 'Vintage Aristocrat, Deep British Tone' },
     { name: 'Martha', ageGroup: 'Senior' as const, gender: 'Female' as const, tag: 'Nostalgic Matron, Gentle, Comforting' },
-    { name: 'Eldridge', ageGroup: 'Senior' as const, gender: 'Male' as const, tag: 'Ancient Sensei, Meditative, Honorable' }
+    { name: 'Eldridge', ageGroup: 'Senior' as const, gender: 'Male' as const, tag: 'Ancient Sensei, Meditative, Honorable' },
   ];
 
   let idCounter = 1;
   for (const reg of REGIONS) {
     for (const arch of ARCHETYPES) {
-      const uniqueId = `voice-${reg.code}-${arch.name.toLowerCase()}-${idCounter++}`;
+      // Map to guaranteed valid real Edge voice ID matching this locale and gender
+      const realVoiceId =
+        edgeLocaleMap.get(`${reg.code}_${arch.gender}`) ||
+        edgeLocaleMap.get(`${reg.code}_Female`) ||
+        edgeLocaleMap.get(`${reg.code}_Male`) ||
+        (arch.gender === 'Female' ? 'en-US-JennyNeural' : 'en-US-GuyNeural');
+
       const fullName = `${arch.name} (${reg.lang.split(' ')[0]} ${arch.ageGroup})`;
       list.push({
-        id: uniqueId,
+        id: realVoiceId,
         name: fullName,
         provider: reg.provider,
         gender: arch.gender,
@@ -238,7 +276,7 @@ export const CURATED_VOICES: VoiceModel[] = (() => {
         language: reg.lang,
         tag: `${arch.tag} • ${reg.lang}`,
         quality: 'Ultra',
-        sampleText: `Hi, I am ${arch.name} from ThirteenLabs.`
+        sampleText: `Hi, I am ${arch.name} from ThirteenLabs.`,
       });
     }
   }

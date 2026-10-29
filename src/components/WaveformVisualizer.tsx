@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { RotateCcw, Download, Volume2, VolumeX, ChevronDown, Check } from 'lucide-react';
 import { AudioFormat } from '@/types';
-import { triggerDownload } from '@/lib/audioEngine';
+import { triggerDownload, downloadFormattedAudio } from '@/lib/audioEngine';
 
 interface WaveformVisualizerProps {
   audioUrl: string | null;
@@ -12,6 +12,7 @@ interface WaveformVisualizerProps {
   onDownload: () => void;
   isLoading: boolean;
   onStopAll?: () => void;
+  playNonce?: number;
 }
 
 export default function WaveformVisualizer({
@@ -21,6 +22,7 @@ export default function WaveformVisualizer({
   onDownload,
   isLoading,
   onStopAll,
+  playNonce,
 }: WaveformVisualizerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -59,6 +61,7 @@ export default function WaveformVisualizer({
     }
 
     const audio = new Audio(audioUrl);
+    audio.playbackRate = playbackSpeed;
     audio.volume = Math.min(1.0, volume);
     audioRef.current = audio;
 
@@ -88,6 +91,28 @@ export default function WaveformVisualizer({
       audioRef.current = null;
     };
   }, [audioUrl]);
+
+  // Replay when playNonce triggers (e.g. clicking same history item)
+  useEffect(() => {
+    if (!playNonce || !audioRef.current) return;
+    audioRef.current.currentTime = 0;
+    audioRef.current.playbackRate = playbackSpeed;
+    audioRef.current.volume = Math.min(1.0, volume);
+    audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
+  }, [playNonce]);
+
+  // Global Ctrl + Space play/pause toggle
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+      if (isCmdOrCtrl && (e.code === 'Space' || e.key === ' ')) {
+        e.preventDefault();
+        togglePlay();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPlaying, playbackSpeed, volume]);
 
   // Handle play / stop toggle
   const togglePlay = () => {
@@ -354,9 +379,13 @@ export default function WaveformVisualizer({
             )}
           </div>
 
-          {/* Download Action Trigger */}
+          {/* Download Action Trigger: Encodes to genuine format (e.g. PCM WAV) */}
           <button
-            onClick={onDownload}
+            onClick={() => {
+              if (audioUrl) {
+                downloadFormattedAudio(audioUrl, selectedFormat, `thirteenlabs-${Date.now()}`);
+              }
+            }}
             disabled={!audioUrl || isLoading}
             className="flex items-center space-x-1.5 rounded-lg border border-studio-obsidian bg-studio-obsidian px-3.5 py-1.5 text-xs font-medium text-studio-white shadow-studio-btn transition-all duration-100 ease-studio-squash hover:-translate-y-0.5 hover:bg-studio-obsidianHover hover:shadow-studio-hover active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
             title="Download audio (Ctrl + D)"

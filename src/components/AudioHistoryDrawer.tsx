@@ -3,7 +3,7 @@
 import React from 'react';
 import { X, History, Play, Trash2, Download, ArrowUpRight } from 'lucide-react';
 import { GeneratedAudioItem } from '@/types';
-import { triggerDownload } from '@/lib/audioEngine';
+import { triggerDownload, downloadFormattedAudio } from '@/lib/audioEngine';
 
 interface AudioHistoryDrawerProps {
   isOpen: boolean;
@@ -12,6 +12,7 @@ interface AudioHistoryDrawerProps {
   onPlayItem: (item: GeneratedAudioItem) => void;
   onRestoreText: (text: string) => void;
   onClearHistory: () => void;
+  onDeleteItem?: (id: string) => void;
 }
 
 export default function AudioHistoryDrawer({
@@ -21,11 +22,20 @@ export default function AudioHistoryDrawer({
   onPlayItem,
   onRestoreText,
   onClearHistory,
+  onDeleteItem,
 }: AudioHistoryDrawerProps) {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-studio-border bg-studio-white shadow-studio-menu transition-all animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      {/* Translucent Backdrop: click outside to dismiss */}
+      <div
+        className="fixed inset-0 bg-black/25 backdrop-blur-xs transition-opacity animate-in fade-in duration-150"
+        onClick={onClose}
+      />
+
+      {/* Slide-over Drawer Container */}
+      <div className="absolute inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-studio-border bg-studio-white shadow-studio-menu transition-all animate-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-studio-border p-4 bg-studio-porcelain">
         <div className="flex items-center space-x-2">
@@ -110,14 +120,26 @@ export default function AudioHistoryDrawer({
                   </button>
                 </div>
 
-                {/* Instant Download */}
-                <button
-                  onClick={() => triggerDownload(item.audioUrl, `thirteenlabs-${item.id}.${item.format}`)}
-                  className="flex h-6 w-6 items-center justify-center rounded border border-studio-border text-studio-muted hover:bg-studio-hover hover:text-studio-obsidian"
-                  title={`Download .${item.format}`}
-                >
-                  <Download className="h-3 w-3 stroke-[1.5]" />
-                </button>
+                {/* Instant Download with format transcoding */}
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={() => downloadFormattedAudio(item.audioUrl, item.format, `thirteenlabs-${item.id}`)}
+                    className="flex h-6 w-6 items-center justify-center rounded border border-studio-border text-studio-muted hover:bg-studio-hover hover:text-studio-obsidian transition-colors"
+                    title={`Download .${item.format}`}
+                  >
+                    <Download className="h-3 w-3 stroke-[1.5]" />
+                  </button>
+
+                  {onDeleteItem && (
+                    <button
+                      onClick={() => onDeleteItem(item.id)}
+                      className="flex h-6 w-6 items-center justify-center rounded border border-studio-border text-studio-muted hover:bg-studio-hover hover:text-red-600 transition-colors"
+                      title="Delete recording"
+                    >
+                      <Trash2 className="h-3 w-3 stroke-[1.5]" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))
@@ -128,6 +150,7 @@ export default function AudioHistoryDrawer({
       <div className="border-t border-studio-border bg-studio-porcelain p-3 text-[10px] text-studio-muted text-center">
         Stored locally in your browser memory • 100% private
       </div>
+    </div>
     </div>
   );
 }

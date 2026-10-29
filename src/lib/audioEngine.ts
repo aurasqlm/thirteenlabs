@@ -84,3 +84,28 @@ export function triggerDownload(url: string, filename: string) {
   anchor.click();
   document.body.removeChild(anchor);
 }
+
+// Convert and download audio with genuine container formatting (e.g. PCM WAV)
+export async function downloadFormattedAudio(audioUrl: string, format: AudioFormat, baseFilename: string) {
+  if (format === 'wav') {
+    try {
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtxClass) {
+        const audioCtx = new AudioCtxClass();
+        const response = await fetch(audioUrl);
+        const arrayBuf = await response.arrayBuffer();
+        const audioBuffer = await audioCtx.decodeAudioData(arrayBuf);
+        const wavBlob = audioBufferToWav(audioBuffer);
+        const wavUrl = URL.createObjectURL(wavBlob);
+        triggerDownload(wavUrl, `${baseFilename}.wav`);
+        setTimeout(() => URL.revokeObjectURL(wavUrl), 10000);
+        return;
+      }
+    } catch (e) {
+      console.warn('In-browser WAV PCM transcoding fallback', e);
+    }
+  }
+
+  // Standard download
+  triggerDownload(audioUrl, `${baseFilename}.${format}`);
+}

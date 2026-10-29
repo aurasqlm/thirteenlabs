@@ -38,7 +38,15 @@ export default function EmotionDrawer({ isOpen, onClose, onInsertTag }: EmotionD
   });
 
   return (
-    <div className="fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-studio-border bg-studio-white shadow-studio-menu transition-all animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-0 z-50 overflow-hidden">
+      {/* Translucent Backdrop: click outside to dismiss */}
+      <div
+        className="fixed inset-0 bg-black/25 backdrop-blur-xs transition-opacity animate-in fade-in duration-150"
+        onClick={onClose}
+      />
+
+      {/* Slide-over Drawer Container */}
+      <div className="absolute inset-y-0 right-0 z-50 flex w-full max-w-md flex-col border-l border-studio-border bg-studio-white shadow-studio-menu transition-all animate-in slide-in-from-right duration-200">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-studio-border p-4 bg-studio-porcelain">
         <div className="flex items-center space-x-2">
@@ -140,5 +148,6 @@ export default function EmotionDrawer({ isOpen, onClose, onInsertTag }: EmotionD
         <span className="font-mono text-studio-obsidian font-medium">100% Free Engine</span>
       </div>
     </div>
+  </div>
   );
 }

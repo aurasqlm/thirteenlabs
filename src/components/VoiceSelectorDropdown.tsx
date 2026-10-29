@@ -15,6 +15,14 @@ interface VoiceSelectorDropdownProps {
 const INITIAL_BATCH_SIZE = 24; // 6 rows of 4 columns
 const BATCH_INCREMENT = 24;
 
+const PROVIDER_FILTERS = [
+  { id: 'all', label: 'All Engines' },
+  { id: 'edge-neural', label: 'Edge Neural' },
+  { id: 'kokoro', label: 'Kokoro-82M' },
+  { id: 'piper', label: 'Piper TTS' },
+  { id: 'web-speech', label: 'Web Speech' },
+];
+
 export default function VoiceSelectorDropdown({
   selectedVoice,
   onSelectVoice,
@@ -62,6 +70,22 @@ export default function VoiceSelectorDropdown({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, handleClose]);
 
+  // Global Ctrl + K / Esc listener for voice search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isCmdOrCtrl = e.metaKey || e.ctrlKey;
+      if (isCmdOrCtrl && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsOpen((prev) => !prev);
+      }
+      if (e.key === 'Escape' && isOpen) {
+        handleClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, handleClose]);
+
   // Focus search input when opened
   useEffect(() => {
     if (isOpen) {
@@ -69,7 +93,7 @@ export default function VoiceSelectorDropdown({
     }
   }, [isOpen]);
 
-  // Filter voices across Age, Gender, and Search
+  // Filter voices across Age, Gender, Engine Provider, and Search
   const filteredVoices = CURATED_VOICES.filter((voice) => {
     const matchesSearch =
       voice.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -79,8 +103,16 @@ export default function VoiceSelectorDropdown({
 
     const matchesAge = selectedAge === 'All' || voice.ageGroup === selectedAge;
     const matchesGender = selectedGender === 'All' || voice.gender === selectedGender;
+    const matchesProvider =
+      !selectedProvider ||
+      selectedProvider === 'all' ||
+      (selectedProvider === 'edge-neural' && (voice.provider.toLowerCase().includes('edge') || voice.provider.toLowerCase().includes('neural'))) ||
+      (selectedProvider === 'kokoro' && voice.provider.toLowerCase().includes('kokoro')) ||
+      (selectedProvider === 'piper' && voice.provider.toLowerCase().includes('piper')) ||
+      (selectedProvider === 'web-speech' && (voice.provider.toLowerCase().includes('web') || voice.provider.toLowerCase().includes('speech'))) ||
+      voice.provider.toLowerCase().includes(selectedProvider.toLowerCase());
 
-    return matchesSearch && matchesAge && matchesGender;
+    return matchesSearch && matchesAge && matchesGender && matchesProvider;
   });
 
   // Infinite scroll handler: loads more when approaching bottom
@@ -228,54 +260,81 @@ export default function VoiceSelectorDropdown({
               </button>
             </div>
 
-            {/* Filter Pills Bar: Age Group, Gender */}
-            <div className="mt-3 flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-studio-borderSoft">
-              {/* Age Filters: Child, Young, Mature, Senior */}
-              <div className="flex items-center space-x-1.5">
-                <span className="text-[11px] font-mono uppercase text-studio-muted mr-1">
-                  Age:
+            {/* Filter Pills Bar: Age Group, Gender & Engine Provider */}
+            <div className="mt-3 flex flex-col gap-2.5 pt-2 border-t border-studio-borderSoft">
+              {/* Engine Provider Filter Row */}
+              <div className="flex items-center space-x-1.5 overflow-x-auto pb-1">
+                <span className="text-[11px] font-mono uppercase text-studio-muted mr-1 shrink-0">
+                  Engine:
                 </span>
-                {(['All', 'Child', 'Young', 'Mature', 'Senior'] as const).map((age) => (
+                {PROVIDER_FILTERS.map((p) => (
                   <button
-                    key={age}
+                    key={p.id}
                     type="button"
                     onClick={() => {
-                      setSelectedAge(age);
+                      onSelectProvider(p.id);
                       setVisibleCount(INITIAL_BATCH_SIZE);
                     }}
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                      selectedAge === age
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors whitespace-nowrap ${
+                      (selectedProvider === p.id || (!selectedProvider && p.id === 'all'))
                         ? 'bg-studio-obsidian text-studio-white shadow-studio-tight'
                         : 'border border-studio-border bg-studio-white text-studio-muted hover:bg-studio-hover hover:text-studio-obsidian'
                     }`}
                   >
-                    {age}
+                    {p.label}
                   </button>
                 ))}
               </div>
 
-              {/* Gender Filters */}
-              <div className="flex items-center space-x-1.5">
-                <span className="text-[11px] font-mono uppercase text-studio-muted mr-1">
-                  Gender:
-                </span>
-                {(['All', 'Female', 'Male'] as const).map((gender) => (
-                  <button
-                    key={gender}
-                    type="button"
-                    onClick={() => {
-                      setSelectedGender(gender);
-                      setVisibleCount(INITIAL_BATCH_SIZE);
-                    }}
-                    className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
-                      selectedGender === gender
-                        ? 'bg-studio-obsidian text-studio-white shadow-studio-tight'
-                        : 'border border-studio-border bg-studio-white text-studio-muted hover:bg-studio-hover hover:text-studio-obsidian'
-                    }`}
-                  >
-                    {gender}
-                  </button>
-                ))}
+              {/* Age & Gender Row */}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                {/* Age Filters: Child, Young, Mature, Senior */}
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-[11px] font-mono uppercase text-studio-muted mr-1">
+                    Age:
+                  </span>
+                  {(['All', 'Child', 'Young', 'Mature', 'Senior'] as const).map((age) => (
+                    <button
+                      key={age}
+                      type="button"
+                      onClick={() => {
+                        setSelectedAge(age);
+                        setVisibleCount(INITIAL_BATCH_SIZE);
+                      }}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                        selectedAge === age
+                          ? 'bg-studio-obsidian text-studio-white shadow-studio-tight'
+                          : 'border border-studio-border bg-studio-white text-studio-muted hover:bg-studio-hover hover:text-studio-obsidian'
+                      }`}
+                    >
+                      {age}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Gender Filters */}
+                <div className="flex items-center space-x-1.5">
+                  <span className="text-[11px] font-mono uppercase text-studio-muted mr-1">
+                    Gender:
+                  </span>
+                  {(['All', 'Female', 'Male'] as const).map((gender) => (
+                    <button
+                      key={gender}
+                      type="button"
+                      onClick={() => {
+                        setSelectedGender(gender);
+                        setVisibleCount(INITIAL_BATCH_SIZE);
+                      }}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                        selectedGender === gender
+                          ? 'bg-studio-obsidian text-studio-white shadow-studio-tight'
+                          : 'border border-studio-border bg-studio-white text-studio-muted hover:bg-studio-hover hover:text-studio-obsidian'
+                      }`}
+                    >
+                      {gender}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

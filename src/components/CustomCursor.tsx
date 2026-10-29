@@ -52,7 +52,7 @@ export default function CustomCursor() {
       ref={cursorRef}
       className="pointer-events-none fixed top-0 left-0 z-[999999] will-change-transform"
       style={{
-        transform: `translate3d(${coords.current.x}px, ${coords.current.y}px, 0)`,
+        transform: `translate3d(${coords.current.x - 3}px, ${coords.current.y - 2}px, 0)`,
         pointerEvents: 'none',
       }}
     >
