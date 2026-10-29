@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Pause, Square, RotateCcw, Download, Volume2, VolumeX, ChevronDown, Check } from 'lucide-react';
+import { RotateCcw, Download, Volume2, VolumeX, ChevronDown, Check } from 'lucide-react';
 import { AudioFormat } from '@/types';
 import { triggerDownload } from '@/lib/audioEngine';
 
@@ -89,31 +89,27 @@ export default function WaveformVisualizer({
     };
   }, [audioUrl]);
 
-  // Handle play/pause
+  // Handle play / stop toggle
   const togglePlay = () => {
-    if (!audioRef.current) return;
     if (isPlaying) {
-      audioRef.current.pause();
+      // Immediate stop / pause
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
       setIsPlaying(false);
+      if (onStopAll) onStopAll();
     } else {
+      if (!audioRef.current) return;
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
       audioRef.current.playbackRate = playbackSpeed;
       audioRef.current.volume = Math.min(1.0, volume);
       audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
     }
-  };
-
-  // Immediate STOP button (stops both Audio element and Web Speech API synthesis)
-  const handleStop = () => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    setIsPlaying(false);
-    setCurrentTime(0);
-    if (onStopAll) onStopAll();
   };
 
   // Change speed
@@ -242,28 +238,25 @@ export default function WaveformVisualizer({
       <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-studio-borderSoft">
         {/* Left: Playback controls, Stop button, Volume & Speed */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Main Play/Pause Button */}
+          {/* Main Play / Pause (Stop) Button: Transforms to sleek || icon during playback */}
           <button
             onClick={togglePlay}
             disabled={!audioUrl || isLoading}
             className="flex h-9 w-9 items-center justify-center rounded-full bg-studio-obsidian text-studio-white shadow-studio-btn transition-all duration-100 ease-studio-squash hover:-translate-y-0.5 hover:bg-studio-obsidianHover hover:shadow-studio-hover active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
-            title={isPlaying ? 'Pause (Ctrl + Space)' : 'Play (Ctrl + Space)'}
+            title={isPlaying ? 'Stop / Pause (Ctrl + Space)' : 'Play (Ctrl + Space)'}
           >
             {isPlaying ? (
-              <Pause className="h-4 w-4 stroke-[2]" />
+              // Sleek, modern rounded pause || icon
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="5" y="3" width="4.5" height="18" rx="2.25" />
+                <rect x="14.5" y="3" width="4.5" height="18" rx="2.25" />
+              </svg>
             ) : (
-              <Play className="h-4 w-4 stroke-[2] ml-0.5" />
+              // Sleek play > icon
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
+                <polygon points="6 3 20 12 6 21 6 3" />
+              </svg>
             )}
-          </button>
-
-          {/* STOP BUTTON: Stops all audio and synthesis immediately */}
-          <button
-            onClick={handleStop}
-            className="flex h-9 items-center space-x-1.5 rounded-full border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 active:scale-95"
-            title="Stop playback immediately"
-          >
-            <Square className="h-3 w-3 fill-current" />
-            <span>Stop</span>
           </button>
 
           {/* Replay Button */}
