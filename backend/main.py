@@ -233,7 +233,7 @@ async def generate_speech_get(
     rate: str = Query("+0%"),
     pitch: str = Query("+0Hz"),
     volume: str = Query("+0%"),
-    format: str = Query("mp3", enum=["mp3", "wav", "ogg", "flac", "aac"]),
+    format: str = Query("mp3"),
     stability: Optional[int] = Query(75),
     similarity: Optional[int] = Query(85)
 ):
