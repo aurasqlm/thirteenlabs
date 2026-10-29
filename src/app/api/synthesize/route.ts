@@ -119,31 +119,30 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Direct High-Reliability Neural Endpoint with Sentence Chunking (<170 chars per chunk)
+    // Direct High-Reliability Neural Endpoint with Concurrent Sentence Chunking (<170 chars per chunk)
     const langCode = getLangCode(voice);
     const textChunks = splitTextIntoChunks(textToSynthesize, 170);
 
-    const chunkBuffers: ArrayBuffer[] = [];
+    const chunkBuffers: ArrayBuffer[] = await Promise.all(
+      textChunks.map(async (chunk) => {
+        const encodedText = encodeURIComponent(chunk);
+        const fallbackTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=${langCode}&client=tw-ob`;
 
-    for (const chunk of textChunks) {
-      const encodedText = encodeURIComponent(chunk);
-      const fallbackTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=${langCode}&client=tw-ob`;
+        const audioRes = await fetch(fallbackTtsUrl, {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Referer: 'https://translate.google.com/',
+          },
+        });
 
-      const audioRes = await fetch(fallbackTtsUrl, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Referer: 'https://translate.google.com/',
-        },
-      });
+        if (!audioRes.ok) {
+          throw new Error(`TTS provider returned status ${audioRes.status}`);
+        }
 
-      if (!audioRes.ok) {
-        throw new Error(`TTS provider returned status ${audioRes.status}`);
-      }
-
-      const chunkData = await audioRes.arrayBuffer();
-      chunkBuffers.push(chunkData);
-    }
+        return audioRes.arrayBuffer();
+      })
+    );
 
     // Concatenate all MP3 frame buffers
     const totalByteLength = chunkBuffers.reduce((acc, b) => acc + b.byteLength, 0);

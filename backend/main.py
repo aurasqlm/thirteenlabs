@@ -1,5 +1,7 @@
 import asyncio
 import io
+import json
+import os
 import re
 from typing import Optional, Set
 from fastapi import FastAPI, HTTPException, Query, Response
@@ -57,12 +59,20 @@ async def ensure_valid_voices():
     global VALID_EDGE_VOICES
     if not VALID_EDGE_VOICES:
         # Load pre-bundled 322 authentic edge voices first for 0ms startup
-        json_path = os.path.join(os.path.dirname(__file__), "..", "src", "lib", "edgeVoices.json")
-        if os.path.exists(json_path):
+        candidates = [
+            os.path.join(os.path.dirname(__file__), "edgeVoices.json"),
+            os.path.join(os.path.dirname(__file__), "..", "src", "lib", "edgeVoices.json"),
+        ]
+        json_path = next((p for p in candidates if os.path.exists(p)), None)
+        if json_path:
             try:
                 with open(json_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    VALID_EDGE_VOICES = {v["ShortName"] for v in data if "ShortName" in v}
+                    VALID_EDGE_VOICES = {
+                        v.get("shortName") or v.get("ShortName") or v["id"]
+                        for v in data
+                        if "shortName" in v or "ShortName" in v or "id" in v
+                    }
             except Exception:
                 pass
 

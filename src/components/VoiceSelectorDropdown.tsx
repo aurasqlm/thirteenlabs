@@ -97,6 +97,7 @@ export default function VoiceSelectorDropdown({
   const filteredVoices = CURATED_VOICES.filter((voice) => {
     const matchesSearch =
       voice.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      voice.locale.toLowerCase().includes(searchQuery.toLowerCase()) ||
       voice.language.toLowerCase().includes(searchQuery.toLowerCase()) ||
       voice.tag.toLowerCase().includes(searchQuery.toLowerCase()) ||
       voice.provider.toLowerCase().includes(searchQuery.toLowerCase());
