@@ -10,6 +10,13 @@ export default function Footer() {
           {/* Brand & Attribution */}
           <div className="flex flex-col items-center md:items-start space-y-1">
             <div className="flex items-center space-x-2">
+              <div className="flex h-5 w-5 items-center justify-center overflow-hidden rounded border border-studio-border bg-studio-obsidian">
+                <img
+                  src="/logo.png"
+                  alt="ThirteenLabs 13 Logo"
+                  className="h-full w-full object-cover"
+                />
+              </div>
               <span className="font-sans text-sm font-semibold tracking-tight text-studio-obsidian">
                 ThirteenLabs
               </span>

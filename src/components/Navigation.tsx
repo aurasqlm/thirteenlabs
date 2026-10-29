@@ -20,8 +20,12 @@ export default function Navigation({ onOpenShortcuts }: NavigationProps) {
         {/* Brand Mark & Author Credits */}
         <div className="flex items-center space-x-3">
           <Link href="/gen" className="group flex items-center space-x-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-studio-obsidian text-studio-white transition-transform group-hover:scale-95">
-              <span className="font-mono text-xs font-bold tracking-tighter">13</span>
+            <div className="flex h-7 w-7 items-center justify-center overflow-hidden rounded-md border border-studio-border bg-studio-obsidian transition-transform group-hover:scale-95 shadow-studio-tight">
+              <img
+                src="/logo.png"
+                alt="ThirteenLabs 13 Logo"
+                className="h-full w-full object-cover"
+              />
             </div>
             <div className="flex flex-col">
               <span className="font-sans text-sm font-semibold tracking-tight text-studio-obsidian">

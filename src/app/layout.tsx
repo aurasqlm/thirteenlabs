@@ -50,6 +50,11 @@ export const metadata: Metadata = {
     description: 'High-quality free speech synthesis aggregating 60+ neural providers with zero API key.',
     creator: '@aurasqlm',
   },
+  icons: {
+    icon: '/logo.png',
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 };
 
 export default function RootLayout({
@@ -81,6 +86,8 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full scroll-smooth" suppressHydrationWarning>
       <head>
+        <link rel="icon" type="image/png" href="/logo.png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
         <link rel="canonical" href="https://thirteenlabs.bond" />
         <script
           type="application/ld+json"
