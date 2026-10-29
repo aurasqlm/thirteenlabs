@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --studio-white: #ffffff;
+  --studio-porcelain: #fafafa;
+  --studio-canvas: #f8f9fa;
+  --studio-border: #e4e4e7;
+  --studio-border-soft: #f1f1f3;
+  --studio-border-active: #a1a1aa;
+  --studio-obsidian: #09090b;
+}
+
+/* Custom 5px ultra-thin floating scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #e4e4e7;
+  border-radius: 9999px;
+  transition: background-color 150ms ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #a1a1aa;
+}
+
+/* Keyframe animations */
+@keyframes dropdownSpring {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@layer utilities {
+  .ease-studio-squash {
+    transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+}

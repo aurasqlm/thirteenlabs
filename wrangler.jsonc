@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "thirteenlabs",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "pages_build_output_dir": ".vercel/output/static",
+  "vars": {
+    "APP_NAME": "ThirteenLabs",
+    "APP_URL": "https://thirteenlabs.bond",
+    "AUTHOR": "aurasqlm",
+    "GITHUB_REPO": "https://github.com/aurasqlm/thirteenlabs"
+  }
+}
