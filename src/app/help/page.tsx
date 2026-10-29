@@ -13,7 +13,6 @@ import {
   Layers,
   Radio,
   Download,
-  Terminal,
   GitBranch,
   Search,
   CheckCircle2,
@@ -24,7 +23,7 @@ import {
 
 export default function HelpDirectoryPage() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'emotions' | 'providers' | 'shortcuts' | 'deploy' | 'audio'>('emotions');
+  const [activeTab, setActiveTab] = useState<'emotions' | 'providers' | 'shortcuts' | 'audio'>('emotions');
   const [searchQuery, setSearchQuery] = useState('');
   const [isShortcutsModalOpen, setIsShortcutsModalOpen] = useState(false);
 
@@ -85,7 +84,7 @@ export default function HelpDirectoryPage() {
             Help Directory & Voice Architecture
           </h1>
           <p className="mt-2 text-sm text-studio-muted max-w-3xl">
-            Master the 1,000+ emotion injection tags, explore our catalog of 60+ free zero-API-key voice engines, understand lossless audio exports, and deploy ThirteenLabs to Cloudflare Wrangler.
+            Master the 1,000+ emotion injection tags, explore our catalog of 60+ free zero-API-key voice engines, and understand lossless audio exports and vocal extensions.
           </p>
 
           {/* Navigation Tabs */}
@@ -95,7 +94,6 @@ export default function HelpDirectoryPage() {
               { id: 'providers', label: '60+ Free Providers', icon: Radio },
               { id: 'shortcuts', label: 'Keyboard Shortcuts', icon: Command },
               { id: 'audio', label: 'Audio Formats & DSP', icon: Download },
-              { id: 'deploy', label: 'Cloudflare Deployment', icon: Terminal },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -283,73 +281,6 @@ export default function HelpDirectoryPage() {
                   <p className="mt-1 text-[11px] text-studio-muted leading-relaxed">{fmt.desc}</p>
                 </div>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* Tab 5: Cloudflare Deployment & Open Source */}
-        {activeTab === 'deploy' && (
-          <div className="space-y-6">
-            <div>
-              <h2 className="text-base font-semibold text-studio-obsidian">
-                Cloudflare Wrangler & Hosting Blueprint
-              </h2>
-              <p className="text-xs text-studio-muted">
-                ThirteenLabs is engineered to deploy seamlessly to Cloudflare Pages via Wrangler for domain <code className="font-mono text-studio-obsidian">thirteenlabs.bond</code>.
-              </p>
-            </div>
-
-            <div className="rounded-xl border border-studio-border bg-studio-white p-6 shadow-studio-tight space-y-4">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-studio-muted">
-                Deploying with Cloudflare Wrangler CLI
-              </h3>
-              <p className="text-xs text-studio-subtle leading-relaxed">
-                The repository includes pre-configured <code className="font-mono text-studio-obsidian">wrangler.jsonc</code> for instant edge deployment.
-              </p>
-
-              <pre className="rounded-lg border border-studio-border bg-studio-obsidian p-4 font-mono text-xs text-studio-white overflow-x-auto">
-{`# 1. Clone repository from GitHub
-git clone https://github.com/aurasqlm/thirteenlabs
-cd thirteenlabs
-
-# 2. Install dependencies
-npm install
-
-# 3. Deploy to Cloudflare Pages via @cloudflare/next-on-pages
-npx @cloudflare/next-on-pages
-npx wrangler pages deploy .vercel/output/static --project-name thirteenlabs
-
-# 4. Optional: Self-host with Docker / Node server
-npm run build
-npm start -- -p 3000`}
-              </pre>
-
-              <div className="border-t border-studio-borderSoft pt-4">
-                <h4 className="text-xs font-semibold text-studio-obsidian">
-                  Open Source Repository & Author
-                </h4>
-                <p className="mt-1 text-xs text-studio-muted">
-                  ThirteenLabs is 100% free and open-source under the MIT license on GitHub at{' '}
-                  <a
-                    href="https://github.com/aurasqlm/thirteenlabs"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-studio-obsidian underline hover:text-black"
-                  >
-                    https://github.com/aurasqlm/thirteenlabs
-                  </a>{' '}
-                  by owner and lead developer{' '}
-                  <a
-                    href="https://github.com/aurasqlm"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-studio-obsidian underline hover:text-black"
-                  >
-                    aurasqlm
-                  </a>
-                  .
-                </p>
-              </div>
             </div>
           </div>
         )}
