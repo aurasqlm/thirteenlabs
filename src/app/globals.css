@@ -12,6 +12,13 @@
   --studio-obsidian: #09090b;
 }
 
+/* Hide default cursor on desktop when custom boutique cursor is active */
+@media (pointer: fine) {
+  html, body, a, button, input, textarea, select, [role="button"] {
+    cursor: none !important;
+  }
+}
+
 /* Custom 5px ultra-thin floating scrollbar */
 ::-webkit-scrollbar {
   width: 5px;

@@ -296,9 +296,9 @@ export default function GenStudioPage() {
           {/* Left Column: Script Editor & Primary Floor (8 cols) */}
           <div className="flex flex-col rounded-xl border border-studio-border bg-studio-white p-5 shadow-studio-tight lg:col-span-8">
             {/* Editor Top Toolbar */}
-            <div className="mb-3 flex items-center justify-between border-b border-studio-borderSoft pb-3">
-              {/* Voice Selector in Editor */}
-              <div className="w-72">
+            <div className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-studio-borderSoft pb-3">
+              {/* Voice Selector in Editor: Wider, Taller & High Prominence */}
+              <div className="w-full sm:max-w-md">
                 <VoiceSelectorDropdown
                   selectedVoice={selectedVoice}
                   onSelectVoice={setSelectedVoice}
@@ -308,7 +308,7 @@ export default function GenStudioPage() {
               </div>
 
               {/* Utility Tools: Clear, Copy, Word Count */}
-              <div className="flex items-center space-x-3 text-xs text-studio-muted">
+              <div className="flex items-center space-x-3 text-xs text-studio-muted self-end sm:self-center">
                 <span className="font-mono text-[11px]">
                   {wordCount} words • {charCount} chars • ~{estimatedSeconds}s
                 </span>

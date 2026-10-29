@@ -79,7 +79,7 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" className="h-full scroll-smooth">
+    <html lang="en" className="h-full scroll-smooth" suppressHydrationWarning>
       <head>
         <link rel="canonical" href="https://thirteenlabs.bond" />
         <script
@@ -87,7 +87,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className="h-full min-h-screen bg-studio-canvas font-sans text-studio-obsidian antialiased selection:bg-studio-obsidian selection:text-studio-white">
+      <body
+        className="h-full min-h-screen bg-studio-canvas font-sans text-studio-obsidian antialiased selection:bg-studio-obsidian selection:text-studio-white"
+        suppressHydrationWarning
+      >
         <CustomCursor />
         {children}
       </body>

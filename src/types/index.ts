@@ -5,6 +5,7 @@ export interface VoiceModel {
   name: string;
   provider: string;
   gender: 'Female' | 'Male' | 'Neutral';
+  ageGroup?: 'Child' | 'Young' | 'Mature' | 'Senior';
   locale: string;
   language: string;
   accent?: string;
