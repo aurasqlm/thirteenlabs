@@ -12,9 +12,9 @@
   --studio-obsidian: #09090b;
 }
 
-/* Hide default cursor on desktop when custom boutique cursor is active */
+/* Universally eliminate default OS cursor everywhere so the modern boutique arrow is strictly active */
 @media (pointer: fine) {
-  html, body, a, button, input, textarea, select, [role="button"] {
+  *, *::before, *::after {
     cursor: none !important;
   }
 }

@@ -19,9 +19,9 @@ export default function CustomCursor() {
       if (!isVisible) setIsVisible(true);
       coords.current = { x: e.clientX, y: e.clientY };
 
-      // Instant 0ms hardware coordinates tracking
+      // Instant 0ms hardware coordinates tracking with hotspot alignment at (3, 2)
       if (cursorRef.current) {
-        cursorRef.current.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0)`;
+        cursorRef.current.style.transform = `translate3d(${e.clientX - 3}px, ${e.clientY - 2}px, 0)`;
       }
     };
 
