@@ -233,6 +233,13 @@ export default function GenStudioPage() {
     triggerDownload(currentAudioUrl, filename);
   };
 
+  // Immediate Stop for all playing audio and speech synthesis
+  const handleStopAllAudio = () => {
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
   // Metrics
   const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
   const charCount = text.length;
@@ -545,6 +552,7 @@ export default function GenStudioPage() {
             onChangeFormat={setDownloadFormat}
             onDownload={handleDownload}
             isLoading={isGenerating}
+            onStopAll={handleStopAllAudio}
           />
         </div>
       </main>

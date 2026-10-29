@@ -2,6 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
+function getLangCode(voiceId: string): string {
+  const localeMatch = voiceId.match(/(?:^|-)([a-z]{2})-[A-Z]{2}/i);
+  if (localeMatch) return localeMatch[1].toLowerCase();
+
+  const standardCodes = ['en', 'es', 'fr', 'de', 'it', 'pt', 'ja', 'ko', 'zh', 'hi', 'ar', 'ru', 'tr', 'pl', 'nl', 'sv', 'th', 'vi', 'id', 'el', 'he', 'bn', 'ur', 'fil', 'da', 'fi', 'no', 'cs', 'hu', 'ro', 'uk', 'ms', 'sw'];
+  for (const code of standardCodes) {
+    if (new RegExp(`(^|[-_])${code}([-_]|$)`, 'i').test(voiceId)) {
+      return code;
+    }
+  }
+  return 'en';
+}
+
 // Generate audio via Edge-TTS / Free Neural TTS
 export async function POST(req: NextRequest) {
   try {
@@ -53,8 +66,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Direct High-Reliability Neural Endpoint (Google Translate Audio / Edge fallback)
-    // Extract language code from voice id (e.g., 'en-US-AndrewMultilingualNeural' -> 'en')
-    const langCode = voice.split('-')[0] || 'en';
+    const langCode = getLangCode(voice);
     const encodedText = encodeURIComponent(textToSynthesize.slice(0, 1000));
     const fallbackTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=${langCode}&client=tw-ob`;
 

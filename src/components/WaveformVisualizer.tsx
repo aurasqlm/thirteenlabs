@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { Play, Pause, RotateCcw, Download, Volume2, ChevronDown, Check } from 'lucide-react';
+import { Play, Pause, Square, RotateCcw, Download, Volume2, VolumeX, ChevronDown, Check } from 'lucide-react';
 import { AudioFormat } from '@/types';
 import { triggerDownload } from '@/lib/audioEngine';
 
@@ -11,6 +11,7 @@ interface WaveformVisualizerProps {
   onChangeFormat: (format: AudioFormat) => void;
   onDownload: () => void;
   isLoading: boolean;
+  onStopAll?: () => void;
 }
 
 export default function WaveformVisualizer({
@@ -19,17 +20,18 @@ export default function WaveformVisualizer({
   onChangeFormat,
   onDownload,
   isLoading,
+  onStopAll,
 }: WaveformVisualizerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [volume, setVolume] = useState(1.0); // 100% full volume
   const [isFormatOpen, setIsFormatOpen] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-
   const formatDropdownRef = useRef<HTMLDivElement>(null);
 
   // Close format dropdown on outside click
@@ -43,15 +45,25 @@ export default function WaveformVisualizer({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Sync audio element
+  // Sync audio element and auto-play on new generation
   useEffect(() => {
     if (!audioUrl) return;
 
+    // Stop any existing speech synthesis
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
     const audio = new Audio(audioUrl);
+    audio.volume = Math.min(1.0, volume);
     audioRef.current = audio;
 
     audio.onloadedmetadata = () => {
-      setDuration(audio.duration);
+      setDuration(audio.duration || 3);
     };
 
     audio.ontimeupdate = () => {
@@ -62,6 +74,14 @@ export default function WaveformVisualizer({
       setIsPlaying(false);
       setCurrentTime(0);
     };
+
+    // Auto-play the newly generated voice
+    audio.play()
+      .then(() => setIsPlaying(true))
+      .catch((err) => {
+        console.warn('Autoplay prevented by browser policy, user can press play', err);
+        setIsPlaying(false);
+      });
 
     return () => {
       audio.pause();
@@ -77,8 +97,23 @@ export default function WaveformVisualizer({
       setIsPlaying(false);
     } else {
       audioRef.current.playbackRate = playbackSpeed;
+      audioRef.current.volume = Math.min(1.0, volume);
       audioRef.current.play().then(() => setIsPlaying(true)).catch(console.error);
     }
+  };
+
+  // Immediate STOP button (stops both Audio element and Web Speech API synthesis)
+  const handleStop = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsPlaying(false);
+    setCurrentTime(0);
+    if (onStopAll) onStopAll();
   };
 
   // Change speed
@@ -86,6 +121,15 @@ export default function WaveformVisualizer({
     setPlaybackSpeed(speed);
     if (audioRef.current) {
       audioRef.current.playbackRate = speed;
+    }
+  };
+
+  // Change volume
+  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newVol = parseFloat(e.target.value);
+    setVolume(newVol);
+    if (audioRef.current) {
+      audioRef.current.volume = Math.min(1.0, newVol);
     }
   };
 
@@ -119,7 +163,6 @@ export default function WaveformVisualizer({
         const barProgress = i / barCount;
         const isActive = barProgress <= progress;
 
-        // Dynamic wave calculation
         const sineWave = Math.sin(i * 0.25 + (isPlaying ? Date.now() * 0.005 : 0));
         const pseudoRandom = Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
         const barHeight = Math.max(4, (sineWave * 0.3 + pseudoRandom * 0.7) * (height * 0.75));
@@ -143,7 +186,6 @@ export default function WaveformVisualizer({
     };
   }, [isPlaying, currentTime, duration]);
 
-  // Format seconds into MM:SS
   const formatTime = (secs: number) => {
     const mins = Math.floor(secs / 60);
     const remainingSecs = Math.floor(secs % 60);
@@ -170,8 +212,8 @@ export default function WaveformVisualizer({
         />
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-studio-white/80 backdrop-blur-xs">
-            <span className="font-mono text-xs text-studio-obsidian animate-pulse">
-              Synthesizing acoustic wave...
+            <span className="font-mono text-xs text-studio-obsidian animate-pulse font-medium">
+              Synthesizing acoustic wave & audio stream...
             </span>
           </div>
         )}
@@ -196,15 +238,15 @@ export default function WaveformVisualizer({
         </span>
       </div>
 
-      {/* Control Deck: Play, Speed, Format Picker, Download */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-studio-borderSoft">
-        {/* Left: Playback controls & speeds */}
-        <div className="flex items-center space-x-2">
-          {/* Main Play/Pause Button: 36px capsule with explosive squash curve */}
+      {/* Control Deck: Play, Stop, Speed, Volume Boost, Format, Download */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-studio-borderSoft">
+        {/* Left: Playback controls, Stop button, Volume & Speed */}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Main Play/Pause Button */}
           <button
             onClick={togglePlay}
             disabled={!audioUrl || isLoading}
-            className={`flex h-9 w-9 items-center justify-center rounded-full bg-studio-obsidian text-studio-white shadow-studio-btn transition-all duration-100 ease-studio-squash hover:-translate-y-0.5 hover:bg-studio-obsidianHover hover:shadow-studio-hover active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none`}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-studio-obsidian text-studio-white shadow-studio-btn transition-all duration-100 ease-studio-squash hover:-translate-y-0.5 hover:bg-studio-obsidianHover hover:shadow-studio-hover active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none"
             title={isPlaying ? 'Pause (Ctrl + Space)' : 'Play (Ctrl + Space)'}
           >
             {isPlaying ? (
@@ -214,12 +256,24 @@ export default function WaveformVisualizer({
             )}
           </button>
 
-          {/* Reset button */}
+          {/* STOP BUTTON: Stops all audio and synthesis immediately */}
+          <button
+            onClick={handleStop}
+            className="flex h-9 items-center space-x-1.5 rounded-full border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-600 transition-colors hover:bg-red-100 active:scale-95"
+            title="Stop playback immediately"
+          >
+            <Square className="h-3 w-3 fill-current" />
+            <span>Stop</span>
+          </button>
+
+          {/* Replay Button */}
           <button
             onClick={() => {
               if (audioRef.current) {
                 audioRef.current.currentTime = 0;
                 setCurrentTime(0);
+                audioRef.current.play();
+                setIsPlaying(true);
               }
             }}
             disabled={!audioUrl}
@@ -229,16 +283,34 @@ export default function WaveformVisualizer({
             <RotateCcw className="h-3.5 w-3.5 stroke-[1.5]" />
           </button>
 
-          {/* Speed Pills: 32px height rounded-full pills */}
-          <div className="flex items-center space-x-1 pl-2">
+          {/* Volume Gain Control */}
+          <div className="flex items-center space-x-1.5 pl-2 border-l border-studio-borderSoft">
+            <Volume2 className="h-3.5 w-3.5 text-studio-muted stroke-[1.5]" />
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={volume}
+              onChange={handleVolumeChange}
+              className="h-1 w-16 cursor-pointer appearance-none rounded-full bg-studio-border accent-studio-obsidian"
+              title={`Volume: ${Math.round(volume * 100)}%`}
+            />
+            <span className="font-mono text-[10px] text-studio-muted">
+              {Math.round(volume * 100)}%
+            </span>
+          </div>
+
+          {/* Speed Multiplier Pills */}
+          <div className="flex items-center space-x-1 pl-2 border-l border-studio-borderSoft">
             {[0.75, 1.0, 1.25, 1.5, 2.0].map((s) => (
               <button
                 key={s}
                 onClick={() => changeSpeed(s)}
-                className={`rounded-full px-2.5 py-1 font-mono text-[11px] transition-all duration-100 ease-studio-squash ${
+                className={`rounded-full px-2 py-0.5 font-mono text-[10px] transition-all duration-100 ${
                   playbackSpeed === s
                     ? 'border border-studio-obsidian bg-studio-obsidian text-studio-white'
-                    : 'border border-studio-border bg-studio-white text-studio-muted hover:-translate-y-0.5 hover:bg-studio-hover hover:text-studio-obsidian active:scale-[0.98]'
+                    : 'border border-studio-border bg-studio-white text-studio-muted hover:bg-studio-hover hover:text-studio-obsidian'
                 }`}
               >
                 {s}x
@@ -247,9 +319,9 @@ export default function WaveformVisualizer({
           </div>
         </div>
 
-        {/* Right: Audio Format Selector & Download Button */}
+        {/* Right: Audio Format Selector & Download */}
         <div className="flex items-center space-x-2">
-          {/* Format Selector Dropdown (MP3, WAV, FLAC, OGG, AAC) */}
+          {/* Format Selector Dropdown */}
           <div ref={formatDropdownRef} className="relative">
             <button
               onClick={() => setIsFormatOpen(!isFormatOpen)}
@@ -289,7 +361,7 @@ export default function WaveformVisualizer({
             )}
           </div>
 
-          {/* Download Action Trigger: 36px capsule button */}
+          {/* Download Action Trigger */}
           <button
             onClick={onDownload}
             disabled={!audioUrl || isLoading}
