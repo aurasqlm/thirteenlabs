@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  output: 'export',
   // Configure headers for Audio / SharedArrayBuffer if needed
   async headers() {
     return [

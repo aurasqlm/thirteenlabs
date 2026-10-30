@@ -4,6 +4,9 @@ import CustomCursor from '@/components/CustomCursor';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://thirteenlabs.bond'),
+  alternates: {
+    canonical: '/',
+  },
   title: {
     default: 'ThirteenLabs | Free High-Quality Voice Generator & 60+ TTS Aggregator by aurasqlm',
     template: '%s | ThirteenLabs',
@@ -88,7 +91,6 @@ export default function RootLayout({
       <head>
         <link rel="icon" type="image/png" href="/logo.png" />
         <link rel="apple-touch-icon" href="/logo.png" />
-        <link rel="canonical" href="https://thirteenlabs.bond" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
