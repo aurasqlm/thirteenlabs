@@ -86,6 +86,12 @@ export function triggerDownload(url: string, filename: string) {
 }
 
 export const SFX_ASSETS: Record<string, string> = {
+  haha: '/sfx/laugh.mp3',
+  laugh: '/sfx/laugh.mp3',
+  chuckle: '/sfx/laugh.mp3',
+  giggle: '/sfx/laugh.mp3',
+  snicker: '/sfx/laugh.mp3',
+  cackle: '/sfx/laugh.mp3',
   cough: '/sfx/cough.mp3',
   'throat-clear': '/sfx/throat_clear.mp3',
   throat_clear: '/sfx/throat_clear.mp3',
@@ -94,11 +100,6 @@ export const SFX_ASSETS: Record<string, string> = {
   wheeze: '/sfx/gasp.mp3',
   sigh: '/sfx/sigh.mp3',
   gasp: '/sfx/gasp.mp3',
-  laugh: '/sfx/laugh.mp3',
-  chuckle: '/sfx/laugh.mp3',
-  giggle: '/sfx/laugh.mp3',
-  snicker: '/sfx/laugh.mp3',
-  cackle: '/sfx/laugh.mp3',
   yawn: '/sfx/yawn.mp3',
   sneeze: '/sfx/sneeze.mp3',
 };
@@ -148,7 +149,7 @@ export function parsePromptSegments(text: string): TextSegment[] {
       currentEmotion = 'whisper';
     } else if (tag.includes('shout') || tag.includes('yell') || tag.includes('scream')) {
       currentEmotion = 'shout';
-    } else if (tag.includes('sad') || tag.includes('crying') || tag.includes('melancholy')) {
+    } else if (tag.includes('sad') || tag.includes('cry') || tag.includes('crying') || tag.includes('sob') || tag.includes('melancholy')) {
       currentEmotion = 'sad';
     } else if (tag.includes('angry') || tag.includes('furious')) {
       currentEmotion = 'angry';
@@ -213,9 +214,8 @@ export async function synthesizeWithWebAudioDSP(
           const rawBuf = await res.arrayBuffer();
           let decoded = await audioCtx.decodeAudioData(rawBuf);
 
-          // Apply DSP for emotions
+          // Apply clean natural prosody - ZERO static or harsh dish antenna filter
           if (seg.emotion === 'whisper') {
-            // Apply 480Hz high-pass filter via OfflineAudioContext to de-voice speech
             const offlineCtx = new OfflineAudioContext(
               decoded.numberOfChannels,
               decoded.length,
@@ -224,16 +224,10 @@ export async function synthesizeWithWebAudioDSP(
             const source = offlineCtx.createBufferSource();
             source.buffer = decoded;
 
-            const highpass = offlineCtx.createBiquadFilter();
-            highpass.type = 'highpass';
-            highpass.frequency.value = 480;
-            highpass.Q.value = 1.0;
-
             const gain = offlineCtx.createGain();
-            gain.gain.value = 0.65;
+            gain.gain.value = 0.75;
 
-            source.connect(highpass);
-            highpass.connect(gain);
+            source.connect(gain);
             gain.connect(offlineCtx.destination);
             source.start(0);
 

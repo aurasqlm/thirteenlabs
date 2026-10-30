@@ -9,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import edge_tts
 from pydub import AudioSegment
-from pydub.generators import WhiteNoise
 
 app = FastAPI(
     title="ThirteenLabs Audio Engine",
@@ -70,19 +69,18 @@ def adjust_hz(base_str: str, delta_int: int) -> str:
 
 SFX_DIR = os.path.join(os.path.dirname(__file__), "sfx")
 SFX_MAP = {
-    'cough': 'cough.mp3',
-    'throat-clear': 'throat_clear.mp3',
-    'throat_clear': 'throat_clear.mp3',
-    'ahem': 'throat_clear.mp3',
-    'snort': 'cough.mp3',
-    'wheeze': 'gasp.mp3',
-    'sigh': 'sigh.mp3',
-    'gasp': 'gasp.mp3',
+    'haha': 'laugh.mp3',
     'laugh': 'laugh.mp3',
     'chuckle': 'laugh.mp3',
     'giggle': 'laugh.mp3',
     'snicker': 'laugh.mp3',
     'cackle': 'laugh.mp3',
+    'cough': 'cough.mp3',
+    'throat-clear': 'throat_clear.mp3',
+    'throat_clear': 'throat_clear.mp3',
+    'ahem': 'throat_clear.mp3',
+    'sigh': 'sigh.mp3',
+    'gasp': 'gasp.mp3',
     'yawn': 'yawn.mp3',
     'sneeze': 'sneeze.mp3',
 }
@@ -125,11 +123,11 @@ def parse_emotion_segments(raw_text: str):
                     pending_pause += 1200
                 else:
                     pending_pause += 500
-            elif any(w in tag for w in ['whisper', 'secretive', 'faint', 'aspiration', 'intimate', 'asmr']):
+            elif any(w in tag for w in ['whisper', 'soft', 'gentle', 'quiet', 'intimate']):
                 current_emotion = 'whisper'
-            elif any(w in tag for w in ['shout', 'yell', 'scream', 'battle', 'commanding']):
+            elif any(w in tag for w in ['shout', 'yell', 'scream', 'cheer']):
                 current_emotion = 'shout'
-            elif any(w in tag for w in ['sad', 'crying', 'grieving', 'melancholy', 'tearful']):
+            elif any(w in tag for w in ['cry', 'crying', 'sob', 'sobbing', 'sad', 'grieving', 'melancholy', 'tearful']):
                 current_emotion = 'sad'
             elif any(w in tag for w in ['angry', 'furious', 'seething', 'growl', 'snarl']):
                 current_emotion = 'angry'
@@ -331,11 +329,12 @@ async def process_speech_generation(req: GenerateRequest):
                 dsp = None
 
                 if emo == "whisper":
+                    # Soft intimate cadence without any dish antenna static or noise
                     txt = txt.strip()
-                    rate = adjust_pct(req.rate, -20)
-                    pitch = adjust_hz(req.pitch, -12)
-                    vol = adjust_pct(req.volume, -35)
-                    dsp = "whisper"
+                    rate = adjust_pct(req.rate, -10)
+                    pitch = adjust_hz(req.pitch, -8)
+                    vol = adjust_pct(req.volume, -20)
+                    dsp = None
                 elif emo == "shout":
                     txt = txt.upper() + ("!" if not txt.endswith("!") else "")
                     rate = adjust_pct(req.rate, 15)
@@ -343,6 +342,7 @@ async def process_speech_generation(req: GenerateRequest):
                     vol = adjust_pct(req.volume, 45)
                     dsp = "shout"
                 elif emo == "sad":
+                    # Heartfelt emotional sad / crying prosody
                     txt = "... " + txt + " ..."
                     rate = adjust_pct(req.rate, -22)
                     pitch = adjust_hz(req.pitch, -18)
@@ -387,21 +387,10 @@ async def process_speech_generation(req: GenerateRequest):
                     volume=vol
                 )
 
-                if dsp == "whisper":
-                    # 2-stage high-pass filter at 480Hz to strip periodic vocal cord fundamental vibration
-                    whisper_devoiced = seg_audio.high_pass_filter(480).high_pass_filter(480).low_pass_filter(6000)
-                    try:
-                        air = WhiteNoise().to_audio_segment(duration=len(whisper_devoiced), volume=-32)
-                        air = air.high_pass_filter(1000).low_pass_filter(4500)
-                        seg_audio = whisper_devoiced.overlay(air) - 2
-                    except Exception:
-                        seg_audio = whisper_devoiced - 2
-                elif dsp == "shout":
+                if dsp == "shout":
                     seg_audio = seg_audio + 2
                 elif dsp == "sad":
-                    seg_audio = seg_audio.low_pass_filter(4200)
-                elif dsp == "radio":
-                    seg_audio = seg_audio.high_pass_filter(350).low_pass_filter(3200) + 3
+                    seg_audio = seg_audio - 1
 
                 master += seg_audio
 
