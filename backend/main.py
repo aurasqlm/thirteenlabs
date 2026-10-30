@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import edge_tts
 from pydub import AudioSegment
+from pydub.generators import WhiteNoise
 
 app = FastAPI(
     title="ThirteenLabs Audio Engine",
@@ -71,11 +72,27 @@ def adjust_hz(base_str: str, delta_int: int) -> str:
     total = max(-50, min(50, val + delta_int))
     return f"+{total}Hz" if total >= 0 else f"{total}Hz"
 
+SFX_DIR = os.path.join(os.path.dirname(__file__), "sfx")
+SFX_MAP = {
+    'cough': 'cough.mp3',
+    'throat-clear': 'throat_clear.mp3',
+    'throat_clear': 'throat_clear.mp3',
+    'ahem': 'throat_clear.mp3',
+    'snort': 'cough.mp3',
+    'wheeze': 'gasp.mp3',
+    'sigh': 'sigh.mp3',
+    'gasp': 'gasp.mp3',
+    'laugh': 'laugh.mp3',
+    'chuckle': 'laugh.mp3',
+    'giggle': 'laugh.mp3',
+    'snicker': 'laugh.mp3',
+    'cackle': 'laugh.mp3',
+    'yawn': 'yawn.mp3',
+    'sneeze': 'sneeze.mp3',
+}
+
 def format_whisper_text(text: str) -> str:
-    words = text.split()
-    if len(words) <= 4:
-        return '... hhh ... ' + ' ... '.join(words) + ' ...'
-    return '... hhh ... ' + ' '.join(words) + ' ...'
+    return text.strip()
 
 def parse_emotion_segments(raw_text: str):
     tag_pattern = re.compile(r'\[([a-zA-Z0-9_.:\- ]+)\]')
@@ -85,27 +102,26 @@ def parse_emotion_segments(raw_text: str):
     current_emotion = 'normal'
     pending_pause = 0
 
-    INTERJECTIONS = {
-        'laugh': 'haha!',
-        'chuckle': 'heh, heh...',
-        'giggle': 'tee-hee!',
-        'snicker': 'snicker...',
-        'cackle': 'bwahaha!',
-        'aha': 'aha!',
-        'cheer': 'hooray!',
-        'sigh': '... haaah ...',
-        'gasp': '... *gasp* ...',
-        'cough': '... *cough* ...',
-        'throat-clear': '... ahem ...',
-        'yawn': '... aaah ...',
-        'shiver': '... brrr ...',
-    }
-
     for i in range(len(parts)):
         part = parts[i]
         if i % 2 == 1:
             tag = part.strip().lower()
-            if 'pause' in tag:
+
+            # Check for authentic human vocal SFX tags
+            matched_sfx = None
+            for sfx_key, sfx_file in SFX_MAP.items():
+                if sfx_key in tag:
+                    matched_sfx = sfx_file
+                    break
+
+            if matched_sfx:
+                segments.append({
+                    'type': 'sfx',
+                    'sfx_file': matched_sfx,
+                    'pause_before_ms': pending_pause + 80
+                })
+                pending_pause = 80
+            elif 'pause' in tag:
                 match = re.search(r'([0-9.]+)\s*s?', tag)
                 if match:
                     pending_pause += int(float(match.group(1)) * 1000)
@@ -113,15 +129,7 @@ def parse_emotion_segments(raw_text: str):
                     pending_pause += 1200
                 else:
                     pending_pause += 500
-            elif any(tag.startswith(k) for k in INTERJECTIONS):
-                matched_k = next(k for k in INTERJECTIONS if tag.startswith(k))
-                segments.append({
-                    'text': INTERJECTIONS[matched_k],
-                    'emotion': matched_k,
-                    'pause_before_ms': pending_pause + 150
-                })
-                pending_pause = 150
-            elif any(w in tag for w in ['whisper', 'secretive', 'faint', 'aspiration', 'intimate']):
+            elif any(w in tag for w in ['whisper', 'secretive', 'faint', 'aspiration', 'intimate', 'asmr']):
                 current_emotion = 'whisper'
             elif any(w in tag for w in ['shout', 'yell', 'scream', 'battle', 'commanding']):
                 current_emotion = 'shout'
@@ -147,6 +155,7 @@ def parse_emotion_segments(raw_text: str):
             text = part.strip()
             if text:
                 segments.append({
+                    'type': 'speech',
                     'text': text,
                     'emotion': current_emotion,
                     'pause_before_ms': pending_pause
@@ -291,46 +300,70 @@ async def process_speech_generation(req: GenerateRequest):
                 volume=req.volume
             )
         else:
-            # Multi-segment acoustic & DSP emotion synthesis
+            # Multi-segment acoustic & DSP emotion synthesis with authentic SFX integration
             master = AudioSegment.empty()
             for seg in segments:
-                emo = seg["emotion"]
-                txt = seg["text"]
+                pause_before = seg.get("pause_before_ms", 0)
+                if pause_before > 0:
+                    master += AudioSegment.silent(duration=pause_before)
+                elif len(master) > 0 and seg.get("emotion") == "whisper":
+                    master += AudioSegment.silent(duration=200)
+
+                # 1. Handle Authentic Human Vocal Sound Effects (cough, laugh, gasp, sigh, etc.)
+                if seg.get("type") == "sfx":
+                    sfx_filename = seg.get("sfx_file", "cough.mp3")
+                    sfx_path = os.path.join(SFX_DIR, sfx_filename)
+                    if os.path.exists(sfx_path):
+                        try:
+                            sfx_audio = AudioSegment.from_file(sfx_path, format="mp3")
+                            master += sfx_audio
+                        except Exception as e:
+                            print(f"Error loading SFX {sfx_filename}: {e}")
+                    if seg.get("pause_after_ms", 0) > 0:
+                        master += AudioSegment.silent(duration=seg["pause_after_ms"])
+                    continue
+
+                # 2. Handle Speech Synthesis with Prosody and Acoustic DSP
+                emo = seg.get("emotion", "normal")
+                txt = seg.get("text", "")
+                if not txt.strip():
+                    continue
+
                 rate = req.rate
                 pitch = req.pitch
                 vol = req.volume
                 dsp = None
 
                 if emo == "whisper":
-                    txt = format_whisper_text(txt)
-                    rate = adjust_pct(req.rate, -25)
-                    pitch = adjust_hz(req.pitch, -14)
-                    vol = adjust_pct(req.volume, -50)
+                    txt = txt.strip()
+                    rate = adjust_pct(req.rate, -20)
+                    pitch = adjust_hz(req.pitch, -12)
+                    vol = adjust_pct(req.volume, -35)
                     dsp = "whisper"
                 elif emo == "shout":
                     txt = txt.upper() + ("!" if not txt.endswith("!") else "")
-                    rate = adjust_pct(req.rate, 12)
+                    rate = adjust_pct(req.rate, 15)
                     pitch = adjust_hz(req.pitch, 28)
-                    vol = adjust_pct(req.volume, 40)
+                    vol = adjust_pct(req.volume, 45)
                     dsp = "shout"
                 elif emo == "sad":
                     txt = "... " + txt + " ..."
-                    rate = adjust_pct(req.rate, -20)
-                    pitch = adjust_hz(req.pitch, -16)
-                    vol = adjust_pct(req.volume, -15)
+                    rate = adjust_pct(req.rate, -22)
+                    pitch = adjust_hz(req.pitch, -18)
+                    vol = adjust_pct(req.volume, -20)
                     dsp = "sad"
                 elif emo == "angry":
                     txt = txt + ("!" if not txt.endswith("!") else "")
-                    rate = adjust_pct(req.rate, 10)
-                    pitch = adjust_hz(req.pitch, -10)
-                    vol = adjust_pct(req.volume, 25)
+                    rate = adjust_pct(req.rate, 12)
+                    pitch = adjust_hz(req.pitch, -12)
+                    vol = adjust_pct(req.volume, 30)
                 elif emo == "nervous":
                     words = txt.split()
                     if words:
                         words[0] = f"{words[0][:2]}-{words[0]}..."
                     txt = " ".join(words)
-                    rate = adjust_pct(req.rate, 18)
-                    pitch = adjust_hz(req.pitch, 14)
+                    rate = adjust_pct(req.rate, 20)
+                    pitch = adjust_hz(req.pitch, 16)
                 elif emo == "robot":
                     rate = adjust_pct(req.rate, -10)
                     pitch = adjust_hz(req.pitch, -6)
@@ -344,7 +377,7 @@ async def process_speech_generation(req: GenerateRequest):
                 elif emo == "excited":
                     rate = adjust_pct(req.rate, 22)
                     pitch = adjust_hz(req.pitch, 24)
-                    vol = adjust_pct(req.volume, 15)
+                    vol = adjust_pct(req.volume, 18)
                 elif emo == "mysterious":
                     rate = adjust_pct(req.rate, -25)
                     pitch = adjust_hz(req.pitch, -16)
@@ -359,19 +392,20 @@ async def process_speech_generation(req: GenerateRequest):
                 )
 
                 if dsp == "whisper":
-                    seg_audio = seg_audio.high_pass_filter(380).low_pass_filter(6000) - 4
+                    # 2-stage high-pass filter at 480Hz to strip periodic vocal cord fundamental vibration
+                    whisper_devoiced = seg_audio.high_pass_filter(480).high_pass_filter(480).low_pass_filter(6000)
+                    try:
+                        air = WhiteNoise().to_audio_segment(duration=len(whisper_devoiced), volume=-32)
+                        air = air.high_pass_filter(1000).low_pass_filter(4500)
+                        seg_audio = whisper_devoiced.overlay(air) - 2
+                    except Exception:
+                        seg_audio = whisper_devoiced - 2
                 elif dsp == "shout":
                     seg_audio = seg_audio + 2
                 elif dsp == "sad":
-                    seg_audio = seg_audio.low_pass_filter(4600)
+                    seg_audio = seg_audio.low_pass_filter(4200)
                 elif dsp == "radio":
-                    seg_audio = seg_audio.high_pass_filter(400).low_pass_filter(3200) + 3
-
-                pause_before = seg.get("pause_before_ms", 0)
-                if pause_before > 0:
-                    master += AudioSegment.silent(duration=pause_before)
-                elif len(master) > 0 and emo == "whisper":
-                    master += AudioSegment.silent(duration=250)
+                    seg_audio = seg_audio.high_pass_filter(350).low_pass_filter(3200) + 3
 
                 master += seg_audio
 

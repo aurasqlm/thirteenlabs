@@ -27,7 +27,7 @@ import AudioHistoryDrawer from '@/components/AudioHistoryDrawer';
 import KeyboardShortcutsModal from '@/components/KeyboardShortcutsModal';
 import { CURATED_VOICES, SCRIPT_PRESETS, ALL_EMOTION_TAGS } from '@/lib/constants';
 import { VoiceModel, AudioFormat, GeneratedAudioItem } from '@/types';
-import { downloadFormattedAudio, triggerDownload, audioBufferToWav, stripEmotionTags } from '@/lib/audioEngine';
+import { downloadFormattedAudio, triggerDownload, audioBufferToWav, stripEmotionTags, synthesizeWithWebAudioDSP } from '@/lib/audioEngine';
 import {
   loadAudioHistoryFromStorage,
   saveAudioToStorage,
@@ -212,7 +212,42 @@ export default function GenStudioPage() {
         return;
       }
     } catch (apiErr) {
-      console.warn('Backend API request encountered an error, activating client engine fallback', apiErr);
+      console.warn('Backend API request encountered an error, activating in-browser Web Audio DSP engine', apiErr);
+    }
+
+    // Priority 2: In-browser Web Audio DSP engine (handles real SFX like cough/laugh & acoustic whisper filtering)
+    try {
+      const blob = await synthesizeWithWebAudioDSP(
+        text,
+        selectedVoice.locale || 'en',
+        speed,
+        pitch
+      );
+      const url = URL.createObjectURL(blob);
+      if (currentAudioUrl && currentAudioUrl.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(currentAudioUrl);
+        } catch (_) {}
+      }
+      setCurrentAudioUrl(url);
+
+      const newItem: GeneratedAudioItem = {
+        id: Date.now().toString(),
+        text,
+        voice: selectedVoice,
+        provider: selectedVoice.provider,
+        format: 'wav',
+        audioUrl: url,
+        durationSeconds: Math.max(2, Math.round(text.split(/\s+/).length * 0.4)),
+        timestamp: Date.now(),
+        settings: { speed, pitch, stability, similarity },
+      };
+      await saveAudioToStorage(newItem, blob);
+      setHistory((prev) => [newItem, ...prev.filter((i) => i.id !== newItem.id)].slice(0, 50));
+      setIsGenerating(false);
+      return;
+    } catch (webAudioErr) {
+      console.warn('In-browser Web Audio DSP engine failed, activating Web Speech API fallback', webAudioErr);
     }
 
     // Fallback: Browser Web Speech API Synthesis

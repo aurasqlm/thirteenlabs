@@ -85,6 +85,231 @@ export function triggerDownload(url: string, filename: string) {
   document.body.removeChild(anchor);
 }
 
+export const SFX_ASSETS: Record<string, string> = {
+  cough: '/sfx/cough.mp3',
+  'throat-clear': '/sfx/throat_clear.mp3',
+  throat_clear: '/sfx/throat_clear.mp3',
+  ahem: '/sfx/throat_clear.mp3',
+  snort: '/sfx/cough.mp3',
+  wheeze: '/sfx/gasp.mp3',
+  sigh: '/sfx/sigh.mp3',
+  gasp: '/sfx/gasp.mp3',
+  laugh: '/sfx/laugh.mp3',
+  chuckle: '/sfx/laugh.mp3',
+  giggle: '/sfx/laugh.mp3',
+  snicker: '/sfx/laugh.mp3',
+  cackle: '/sfx/laugh.mp3',
+  yawn: '/sfx/yawn.mp3',
+  sneeze: '/sfx/sneeze.mp3',
+};
+
+export interface TextSegment {
+  type: 'speech' | 'sfx' | 'pause';
+  content: string;
+  emotion?: 'normal' | 'whisper' | 'shout' | 'sad' | 'angry' | 'nervous';
+  pauseMs?: number;
+}
+
+export function parsePromptSegments(text: string): TextSegment[] {
+  const tagPattern = /\[([a-zA-Z0-9_.:\- ]+)\]/g;
+  const segments: TextSegment[] = [];
+  let lastIndex = 0;
+  let currentEmotion: 'normal' | 'whisper' | 'shout' | 'sad' | 'angry' | 'nervous' = 'normal';
+
+  let match: RegExpExecArray | null;
+  while ((match = tagPattern.exec(text)) !== null) {
+    const textBefore = text.substring(lastIndex, match.index).trim();
+    if (textBefore) {
+      segments.push({ type: 'speech', content: textBefore, emotion: currentEmotion });
+    }
+    const tag = match[1].toLowerCase().trim();
+    lastIndex = match.index + match[0].length;
+
+    if (tag.includes('pause')) {
+      const numMatch = tag.match(/([0-9.]+)\s*s?/);
+      const ms = numMatch ? Math.round(parseFloat(numMatch[1]) * 1000) : 500;
+      segments.push({ type: 'pause', content: '', pauseMs: ms });
+      continue;
+    }
+
+    let matchedSfx: string | null = null;
+    for (const [k, v] of Object.entries(SFX_ASSETS)) {
+      if (tag.includes(k)) {
+        matchedSfx = v;
+        break;
+      }
+    }
+    if (matchedSfx) {
+      segments.push({ type: 'sfx', content: matchedSfx });
+      continue;
+    }
+
+    if (tag.includes('whisper') || tag.includes('secretive') || tag.includes('faint') || tag.includes('asmr')) {
+      currentEmotion = 'whisper';
+    } else if (tag.includes('shout') || tag.includes('yell') || tag.includes('scream')) {
+      currentEmotion = 'shout';
+    } else if (tag.includes('sad') || tag.includes('crying') || tag.includes('melancholy')) {
+      currentEmotion = 'sad';
+    } else if (tag.includes('angry') || tag.includes('furious')) {
+      currentEmotion = 'angry';
+    } else if (tag.includes('nervous') || tag.includes('tremble')) {
+      currentEmotion = 'nervous';
+    } else if (tag.includes('normal') || tag.includes('reset')) {
+      currentEmotion = 'normal';
+    }
+  }
+
+  const remaining = text.substring(lastIndex).trim();
+  if (remaining) {
+    segments.push({ type: 'speech', content: remaining, emotion: currentEmotion });
+  }
+
+  return segments.length > 0 ? segments : [{ type: 'speech', content: text, emotion: 'normal' }];
+}
+
+// In-browser Web Audio synthesis engine with real SFX and acoustic filter DSP
+export async function synthesizeWithWebAudioDSP(
+  text: string,
+  voiceLocale: string = 'en',
+  speed: number = 1.0,
+  pitch: number = 1.0
+): Promise<Blob> {
+  const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+  if (!AudioCtxClass) {
+    throw new Error('Web Audio API not supported');
+  }
+  const audioCtx = new AudioCtxClass();
+  const segments = parsePromptSegments(text);
+  const audioBuffers: AudioBuffer[] = [];
+
+  const langCode = voiceLocale.split('-')[0].toLowerCase() || 'en';
+
+  for (const seg of segments) {
+    if (seg.type === 'sfx') {
+      try {
+        const sfxRes = await fetch(seg.content);
+        if (sfxRes.ok) {
+          const sfxBuf = await sfxRes.arrayBuffer();
+          const decoded = await audioCtx.decodeAudioData(sfxBuf);
+          audioBuffers.push(decoded);
+        }
+      } catch (e) {
+        console.warn('Could not load SFX in browser', seg.content, e);
+      }
+    } else if (seg.type === 'pause') {
+      const pauseDuration = (seg.pauseMs || 500) / 1000;
+      const silentBuffer = audioCtx.createBuffer(1, Math.round(audioCtx.sampleRate * pauseDuration), audioCtx.sampleRate);
+      audioBuffers.push(silentBuffer);
+    } else if (seg.type === 'speech' && seg.content) {
+      try {
+        const encodedText = encodeURIComponent(seg.content);
+        const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodedText}&tl=${langCode}&client=tw-ob`;
+        const res = await fetch(ttsUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+        });
+        if (res.ok) {
+          const rawBuf = await res.arrayBuffer();
+          let decoded = await audioCtx.decodeAudioData(rawBuf);
+
+          // Apply DSP for emotions
+          if (seg.emotion === 'whisper') {
+            // Apply 480Hz high-pass filter via OfflineAudioContext to de-voice speech
+            const offlineCtx = new OfflineAudioContext(
+              decoded.numberOfChannels,
+              decoded.length,
+              decoded.sampleRate
+            );
+            const source = offlineCtx.createBufferSource();
+            source.buffer = decoded;
+
+            const highpass = offlineCtx.createBiquadFilter();
+            highpass.type = 'highpass';
+            highpass.frequency.value = 480;
+            highpass.Q.value = 1.0;
+
+            const gain = offlineCtx.createGain();
+            gain.gain.value = 0.65;
+
+            source.connect(highpass);
+            highpass.connect(gain);
+            gain.connect(offlineCtx.destination);
+            source.start(0);
+
+            decoded = await offlineCtx.startRendering();
+          } else if (seg.emotion === 'sad') {
+            const offlineCtx = new OfflineAudioContext(
+              decoded.numberOfChannels,
+              decoded.length,
+              decoded.sampleRate
+            );
+            const source = offlineCtx.createBufferSource();
+            source.buffer = decoded;
+
+            const lowpass = offlineCtx.createBiquadFilter();
+            lowpass.type = 'lowpass';
+            lowpass.frequency.value = 3800;
+
+            const gain = offlineCtx.createGain();
+            gain.gain.value = 0.8;
+
+            source.connect(lowpass);
+            lowpass.connect(gain);
+            gain.connect(offlineCtx.destination);
+            source.start(0);
+
+            decoded = await offlineCtx.startRendering();
+          } else if (seg.emotion === 'shout') {
+            const offlineCtx = new OfflineAudioContext(
+              decoded.numberOfChannels,
+              decoded.length,
+              decoded.sampleRate
+            );
+            const source = offlineCtx.createBufferSource();
+            source.buffer = decoded;
+
+            const gain = offlineCtx.createGain();
+            gain.gain.value = 1.35;
+
+            source.connect(gain);
+            gain.connect(offlineCtx.destination);
+            source.start(0);
+
+            decoded = await offlineCtx.startRendering();
+          }
+
+          audioBuffers.push(decoded);
+        }
+      } catch (ttsErr) {
+        console.warn('Speech chunk failed in browser engine', ttsErr);
+      }
+    }
+  }
+
+  if (audioBuffers.length === 0) {
+    throw new Error('No audio buffers could be generated');
+  }
+
+  // Concatenate all AudioBuffers into one master buffer
+  const sampleRate = audioBuffers[0].sampleRate;
+  const numChannels = Math.max(...audioBuffers.map((b) => b.numberOfChannels));
+  const totalLength = audioBuffers.reduce((sum, b) => sum + b.length, 0);
+
+  const masterBuffer = audioCtx.createBuffer(numChannels, totalLength, sampleRate);
+  for (let ch = 0; ch < numChannels; ch++) {
+    const channelData = masterBuffer.getChannelData(ch);
+    let offset = 0;
+    for (const b of audioBuffers) {
+      const srcChannel = ch < b.numberOfChannels ? b.getChannelData(ch) : b.getChannelData(0);
+      channelData.set(srcChannel, offset);
+      offset += b.length;
+    }
+  }
+
+  return audioBufferToWav(masterBuffer);
+}
+
 // Convert and download audio with genuine container formatting (e.g. PCM WAV)
 export async function downloadFormattedAudio(audioUrl: string, format: AudioFormat, baseFilename: string) {
   if (format === 'wav') {
