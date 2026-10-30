@@ -34,6 +34,7 @@ export default function VoiceSelectorDropdown({
   const [selectedAge, setSelectedAge] = useState<'All' | 'Child' | 'Young' | 'Mature' | 'Senior'>('All');
   const [selectedGender, setSelectedGender] = useState<'All' | 'Male' | 'Female'>('All');
   const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Dynamic virtualized scrolling batch count
   const [visibleCount, setVisibleCount] = useState(INITIAL_BATCH_SIZE);
@@ -51,6 +52,10 @@ export default function VoiceSelectorDropdown({
       scrollContainerRef.current.scrollTop = 0;
     }
     // Stop any preview playback
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+    }
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -126,47 +131,69 @@ export default function VoiceSelectorDropdown({
     }
   };
 
-  // Preview voice sample
+  // Preview voice sample using real neural audio with fallback
   const handlePreviewVoice = (e: React.MouseEvent, voice: VoiceModel) => {
     e.stopPropagation();
 
     if (typeof window === 'undefined') return;
 
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      previewAudioRef.current = null;
+    }
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+
     if (previewingVoiceId === voice.id) {
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-      }
       setPreviewingVoiceId(null);
       return;
     }
 
     setPreviewingVoiceId(voice.id);
 
-    // Speak loud and clear
     const previewSentence = `Hi, I am ${voice.name.split(' ')[0]} from ThirteenLabs.`;
+    const voiceIdParam = encodeURIComponent(voice.edgeVoiceId || voice.id);
+    const textParam = encodeURIComponent(previewSentence);
 
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(previewSentence);
-      utterance.volume = 1.0; // Max volume
-      utterance.rate = 1.0;
-      utterance.pitch = voice.ageGroup === 'Child' ? 1.25 : voice.ageGroup === 'Senior' ? 0.85 : 1.0;
+    // 1. Try real neural speech preview via local or proxy endpoint
+    const previewUrl = `http://127.0.0.1:8000/api/generate?voice=${voiceIdParam}&text=${textParam}&format=mp3`;
+    const audio = new Audio(previewUrl);
+    previewAudioRef.current = audio;
 
-      const availableVoices = window.speechSynthesis.getVoices();
-      const matched = availableVoices.find(
-        (v) =>
-          v.lang.toLowerCase() === voice.locale.toLowerCase() ||
-          v.name.toLowerCase().includes(voice.name.toLowerCase())
-      );
-      if (matched) utterance.voice = matched;
+    audio.onended = () => {
+      setPreviewingVoiceId(null);
+      previewAudioRef.current = null;
+    };
 
-      utterance.onend = () => setPreviewingVoiceId(null);
-      utterance.onerror = () => setPreviewingVoiceId(null);
+    audio.onerror = () => {
+      // 2. Fallback to browser Web Speech API
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(previewSentence);
+        utterance.volume = 1.0;
+        utterance.rate = 1.0;
+        utterance.pitch = voice.ageGroup === 'Child' ? 1.25 : voice.ageGroup === 'Senior' ? 0.85 : 1.0;
 
-      window.speechSynthesis.speak(utterance);
-    } else {
-      setTimeout(() => setPreviewingVoiceId(null), 2000);
-    }
+        const availableVoices = window.speechSynthesis.getVoices();
+        const matched = availableVoices.find(
+          (v) =>
+            v.lang.toLowerCase() === voice.locale.toLowerCase() ||
+            v.name.toLowerCase().includes(voice.name.toLowerCase())
+        );
+        if (matched) utterance.voice = matched;
+
+        utterance.onend = () => setPreviewingVoiceId(null);
+        utterance.onerror = () => setPreviewingVoiceId(null);
+
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setPreviewingVoiceId(null);
+      }
+    };
+
+    audio.play().catch(() => {
+      audio.onerror?.(new Event('error'));
+    });
   };
 
   const currentlyRenderedVoices = filteredVoices.slice(0, visibleCount);

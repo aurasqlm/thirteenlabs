@@ -171,48 +171,65 @@ export default function GenStudioPage() {
 
     setIsGenerating(true);
 
-    try {
-      // Priority 1: Call Next.js synthesis API route
-      const response = await fetch('/api/synthesize', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          voice: selectedVoice.edgeVoiceId || selectedVoice.id,
-          rate: speed,
-          pitch: pitch,
-          format: downloadFormat,
-        }),
-      });
+    // High-Reliability Neural Synthesis Cascade
+    const endpoints = [
+      '/api/synthesize',
+      'http://127.0.0.1:8000/api/generate',
+      'http://localhost:8000/api/generate',
+    ];
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        if (currentAudioUrl && currentAudioUrl.startsWith('blob:')) {
-          try {
-            URL.revokeObjectURL(currentAudioUrl);
-          } catch (_) {}
+    let generatedBlob: Blob | null = null;
+    let formatUsed: AudioFormat = downloadFormat;
+
+    for (const endpoint of endpoints) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text,
+            voice: selectedVoice.edgeVoiceId || selectedVoice.id,
+            rate: speed >= 1.0 ? `+${Math.round((speed - 1.0) * 100)}%` : `-${Math.round((1.0 - speed) * 100)}%`,
+            pitch: pitch >= 1.0 ? `+${Math.round((pitch - 1.0) * 50)}Hz` : `-${Math.round((1.0 - pitch) * 50)}Hz`,
+            volume: '+0%',
+            format: downloadFormat,
+          }),
+        });
+
+        if (response.ok) {
+          generatedBlob = await response.blob();
+          formatUsed = downloadFormat;
+          break;
         }
-        setCurrentAudioUrl(url);
-
-        const newItem: GeneratedAudioItem = {
-          id: Date.now().toString(),
-          text,
-          voice: selectedVoice,
-          provider: selectedVoice.provider,
-          format: downloadFormat,
-          audioUrl: url,
-          durationSeconds: Math.max(2, Math.round(text.split(/\s+/).length * 0.4)),
-          timestamp: Date.now(),
-          settings: { speed, pitch, stability, similarity },
-        };
-        await saveAudioToStorage(newItem, blob);
-        setHistory((prev) => [newItem, ...prev.filter((i) => i.id !== newItem.id)].slice(0, 50));
-        setIsGenerating(false);
-        return;
+      } catch (err) {
+        // Continue to next endpoint in cascade
       }
-    } catch (apiErr) {
-      console.warn('Backend API request encountered an error, activating in-browser Web Audio DSP engine', apiErr);
+    }
+
+    if (generatedBlob) {
+      const url = URL.createObjectURL(generatedBlob);
+      if (currentAudioUrl && currentAudioUrl.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(currentAudioUrl);
+        } catch (_) {}
+      }
+      setCurrentAudioUrl(url);
+
+      const newItem: GeneratedAudioItem = {
+        id: Date.now().toString(),
+        text,
+        voice: selectedVoice,
+        provider: selectedVoice.provider,
+        format: formatUsed,
+        audioUrl: url,
+        durationSeconds: Math.max(2, Math.round(text.split(/\s+/).length * 0.4)),
+        timestamp: Date.now(),
+        settings: { speed, pitch, stability, similarity },
+      };
+      await saveAudioToStorage(newItem, generatedBlob);
+      setHistory((prev) => [newItem, ...prev.filter((i) => i.id !== newItem.id)].slice(0, 50));
+      setIsGenerating(false);
+      return;
     }
 
     // Priority 2: In-browser Web Audio DSP engine (handles real SFX like cough/laugh & acoustic whisper filtering)

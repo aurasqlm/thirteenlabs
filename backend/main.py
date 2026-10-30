@@ -17,14 +17,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS setup with support for Cloudflare Pages preview domains
+# CORS setup supporting all origins, custom domains, and Cloudflare Pages
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "https://thirteenlabs.bond",
-    ],
-    allow_origin_regex=r"^https://([a-zA-Z0-9-]+\.)*pages\.dev$",
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
