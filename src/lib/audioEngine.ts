@@ -65,8 +65,9 @@ export function audioBufferToWav(buffer: AudioBuffer): Blob {
 // Clean emotion tags from text for standard speech synthesis
 export function stripEmotionTags(text: string): string {
   return text
-    .replace(/\[(?:aha|laugh|giggle|snicker|cackle)[^\]]*\]/gi, ' haha ')
-    .replace(/\[(?:cough|throat-clear|gasp|sigh|yawn)[^\]]*\]/gi, ' ... ')
+    .replace(/\[(?:aha|haha|laugh|giggle|snicker|cackle)[^\]]*\]/gi, ' haha ')
+    .replace(/\[(?:cry|crying|sob|sobbing|weep)[^\]]*\]/gi, ' ... ')
+    .replace(/\[(?:cough|throat-clear|gasp|sigh|yawn|sneeze)[^\]]*\]/gi, ' ... ')
     .replace(/\[(?:whisper)[^\]]*\]/gi, ' ')
     .replace(/\[(?:shout)[^\]]*\]/gi, '! ')
     .replace(/\[pause\s*([0-9.]+)s?\]/gi, ' ... ')
@@ -92,6 +93,11 @@ export const SFX_ASSETS: Record<string, string> = {
   giggle: '/sfx/laugh.mp3',
   snicker: '/sfx/laugh.mp3',
   cackle: '/sfx/laugh.mp3',
+  cry: '/sfx/cry.mp3',
+  crying: '/sfx/cry.mp3',
+  sob: '/sfx/cry.mp3',
+  sobbing: '/sfx/cry.mp3',
+  weep: '/sfx/cry.mp3',
   cough: '/sfx/cough.mp3',
   'throat-clear': '/sfx/throat_clear.mp3',
   throat_clear: '/sfx/throat_clear.mp3',
@@ -107,7 +113,7 @@ export const SFX_ASSETS: Record<string, string> = {
 export interface TextSegment {
   type: 'speech' | 'sfx' | 'pause';
   content: string;
-  emotion?: 'normal' | 'whisper' | 'shout' | 'sad' | 'angry' | 'nervous';
+  emotion?: 'normal' | 'shout' | 'sad' | 'angry' | 'nervous';
   pauseMs?: number;
 }
 
@@ -115,7 +121,7 @@ export function parsePromptSegments(text: string): TextSegment[] {
   const tagPattern = /\[([a-zA-Z0-9_.:\- ]+)\]/g;
   const segments: TextSegment[] = [];
   let lastIndex = 0;
-  let currentEmotion: 'normal' | 'whisper' | 'shout' | 'sad' | 'angry' | 'nervous' = 'normal';
+  let currentEmotion: 'normal' | 'shout' | 'sad' | 'angry' | 'nervous' = 'normal';
 
   let match: RegExpExecArray | null;
   while ((match = tagPattern.exec(text)) !== null) {
@@ -142,12 +148,13 @@ export function parsePromptSegments(text: string): TextSegment[] {
     }
     if (matchedSfx) {
       segments.push({ type: 'sfx', content: matchedSfx });
+      if (tag.includes('cry') || tag.includes('sob') || tag.includes('weep')) {
+        currentEmotion = 'sad';
+      }
       continue;
     }
 
-    if (tag.includes('whisper') || tag.includes('secretive') || tag.includes('faint') || tag.includes('asmr')) {
-      currentEmotion = 'whisper';
-    } else if (tag.includes('shout') || tag.includes('yell') || tag.includes('scream')) {
+    if (tag.includes('shout') || tag.includes('yell') || tag.includes('scream')) {
       currentEmotion = 'shout';
     } else if (tag.includes('sad') || tag.includes('cry') || tag.includes('crying') || tag.includes('sob') || tag.includes('melancholy')) {
       currentEmotion = 'sad';
@@ -155,7 +162,7 @@ export function parsePromptSegments(text: string): TextSegment[] {
       currentEmotion = 'angry';
     } else if (tag.includes('nervous') || tag.includes('tremble')) {
       currentEmotion = 'nervous';
-    } else if (tag.includes('normal') || tag.includes('reset')) {
+    } else if (tag.includes('normal') || tag.includes('reset') || tag.includes('whisper')) {
       currentEmotion = 'normal';
     }
   }
@@ -215,24 +222,7 @@ export async function synthesizeWithWebAudioDSP(
           let decoded = await audioCtx.decodeAudioData(rawBuf);
 
           // Apply clean natural prosody - ZERO static or harsh dish antenna filter
-          if (seg.emotion === 'whisper') {
-            const offlineCtx = new OfflineAudioContext(
-              decoded.numberOfChannels,
-              decoded.length,
-              decoded.sampleRate
-            );
-            const source = offlineCtx.createBufferSource();
-            source.buffer = decoded;
-
-            const gain = offlineCtx.createGain();
-            gain.gain.value = 0.75;
-
-            source.connect(gain);
-            gain.connect(offlineCtx.destination);
-            source.start(0);
-
-            decoded = await offlineCtx.startRendering();
-          } else if (seg.emotion === 'sad') {
+          if (seg.emotion === 'sad') {
             const offlineCtx = new OfflineAudioContext(
               decoded.numberOfChannels,
               decoded.length,

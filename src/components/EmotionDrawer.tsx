@@ -76,7 +76,7 @@ export default function EmotionDrawer({ isOpen, onClose, onInsertTag }: EmotionD
           <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-studio-muted stroke-[1.5]" />
           <input
             type="text"
-            placeholder="Search emotions (e.g. laugh, cough, whisper, pause)..."
+            placeholder="Search emotions (e.g. haha, cry, laugh, cough, pause)..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-md border border-studio-border bg-studio-canvas py-1.5 pl-8 pr-3 text-xs text-studio-obsidian placeholder-studio-muted outline-none transition-colors focus:border-studio-borderActive focus:bg-studio-white"

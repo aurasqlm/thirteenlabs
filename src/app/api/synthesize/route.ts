@@ -5,6 +5,17 @@ import path from 'path';
 export const runtime = 'nodejs';
 
 const SFX_FILE_MAP: Record<string, string> = {
+  haha: 'laugh.mp3',
+  laugh: 'laugh.mp3',
+  chuckle: 'laugh.mp3',
+  giggle: 'laugh.mp3',
+  snicker: 'laugh.mp3',
+  cackle: 'laugh.mp3',
+  cry: 'cry.mp3',
+  crying: 'cry.mp3',
+  sob: 'cry.mp3',
+  sobbing: 'cry.mp3',
+  weep: 'cry.mp3',
   cough: 'cough.mp3',
   'throat-clear': 'throat_clear.mp3',
   throat_clear: 'throat_clear.mp3',
@@ -13,11 +24,6 @@ const SFX_FILE_MAP: Record<string, string> = {
   wheeze: 'gasp.mp3',
   sigh: 'sigh.mp3',
   gasp: 'gasp.mp3',
-  laugh: 'laugh.mp3',
-  chuckle: 'laugh.mp3',
-  giggle: 'laugh.mp3',
-  snicker: 'laugh.mp3',
-  cackle: 'laugh.mp3',
   yawn: 'yawn.mp3',
   sneeze: 'sneeze.mp3',
 };
@@ -84,11 +90,12 @@ export async function POST(req: NextRequest) {
 
     // Format emotion tags for acoustic generation while respecting human prosody
     const cleanedText = text
-      .replace(/\[(?:cough|throat-clear|snort|wheeze)[^\]]*\]/gi, ' ... ')
+      .replace(/\[(?:cough|throat-clear|snort|wheeze|sneeze)[^\]]*\]/gi, ' ... ')
       .replace(/\[(?:sigh)[^\]]*\]/gi, ' ... haaah ... ')
       .replace(/\[(?:gasp)[^\]]*\]/gi, ' ... ah! ... ')
-      .replace(/\[(?:laugh|giggle|snicker|chuckle|cackle|smirk)[^\]]*\]/gi, ' haha! ')
-      .replace(/\[(?:whisper|secretive|faint)[^\]]*\]/gi, ' ... hhh ... ')
+      .replace(/\[(?:haha|laugh|giggle|snicker|chuckle|cackle|smirk)[^\]]*\]/gi, ' haha! ')
+      .replace(/\[(?:cry|crying|sob|sobbing|weep)[^\]]*\]/gi, ' ... ')
+      .replace(/\[(?:whisper)[^\]]*\]/gi, ' ')
       .replace(/\[(?:shout|yell|cheer)[^\]]*\]/gi, '! ')
       .replace(/\[pause\s*([0-9.]+)s?\]/gi, ' ... ')
       .replace(/\[.*?\]/g, '')

@@ -27,8 +27,9 @@ app.add_middleware(
 
 # Clean SSML tags and convert custom emotion extensions with attribute support
 def preprocess_text(text: str) -> str:
-    cleaned = re.sub(r'\[(?:cough|throat-clear|gasp|sigh|yawn|snort|wheeze)[^\]]*\]', ' ... ', text, flags=re.IGNORECASE)
-    cleaned = re.sub(r'\[(?:laugh|giggle|snicker|chuckle|cackle|smirk)[^\]]*\]', ' haha! ', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\[(?:cough|throat-clear|gasp|sigh|yawn|snort|wheeze|sneeze)[^\]]*\]', ' ... ', text, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\[(?:haha|laugh|giggle|snicker|chuckle|cackle|smirk)[^\]]*\]', ' haha! ', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\[(?:cry|crying|sob|sobbing|weep)[^\]]*\]', ' ... ', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'\[(?:whisper)[^\]]*\]', ' ', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'\[(?:shout|yell|cheer)[^\]]*\]', '! ', cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(r'\[pause\s*([0-9.]+)s?\]', ' ... ', cleaned, flags=re.IGNORECASE)
@@ -75,6 +76,11 @@ SFX_MAP = {
     'giggle': 'laugh.mp3',
     'snicker': 'laugh.mp3',
     'cackle': 'laugh.mp3',
+    'cry': 'cry.mp3',
+    'crying': 'cry.mp3',
+    'sob': 'cry.mp3',
+    'sobbing': 'cry.mp3',
+    'weep': 'cry.mp3',
     'cough': 'cough.mp3',
     'throat-clear': 'throat_clear.mp3',
     'throat_clear': 'throat_clear.mp3',
@@ -84,9 +90,6 @@ SFX_MAP = {
     'yawn': 'yawn.mp3',
     'sneeze': 'sneeze.mp3',
 }
-
-def format_whisper_text(text: str) -> str:
-    return text.strip()
 
 def parse_emotion_segments(raw_text: str):
     tag_pattern = re.compile(r'\[([a-zA-Z0-9_.:\- ]+)\]')
@@ -115,6 +118,11 @@ def parse_emotion_segments(raw_text: str):
                     'pause_before_ms': pending_pause + 80
                 })
                 pending_pause = 80
+                # If tag is cry/sob, carry emotional sadness into subsequent speech
+                if any(w in tag for w in ['cry', 'sob', 'weep']):
+                    current_emotion = 'sad'
+                elif any(w in tag for w in ['haha', 'laugh', 'chuckle']):
+                    current_emotion = 'excited'
             elif 'pause' in tag:
                 match = re.search(r'([0-9.]+)\s*s?', tag)
                 if match:
@@ -123,28 +131,24 @@ def parse_emotion_segments(raw_text: str):
                     pending_pause += 1200
                 else:
                     pending_pause += 500
-            elif any(w in tag for w in ['whisper', 'soft', 'gentle', 'quiet', 'intimate']):
-                current_emotion = 'whisper'
-            elif any(w in tag for w in ['shout', 'yell', 'scream', 'cheer']):
-                current_emotion = 'shout'
             elif any(w in tag for w in ['cry', 'crying', 'sob', 'sobbing', 'sad', 'grieving', 'melancholy', 'tearful']):
                 current_emotion = 'sad'
+            elif any(w in tag for w in ['shout', 'yell', 'scream', 'cheer']):
+                current_emotion = 'shout'
             elif any(w in tag for w in ['angry', 'furious', 'seething', 'growl', 'snarl']):
                 current_emotion = 'angry'
             elif any(w in tag for w in ['nervous', 'tremble', 'stammer', 'shaky']):
                 current_emotion = 'nervous'
-            elif any(w in tag for w in ['robot', 'dsp:robot']):
-                current_emotion = 'robot'
-            elif any(w in tag for w in ['radio', 'walkie', 'telephone']):
-                current_emotion = 'radio'
+            elif any(w in tag for w in ['excited', 'bubbly', 'thrilled']):
+                current_emotion = 'excited'
             elif any(w in tag for w in ['slow', 'tempo:slow-down', 'deliberate']):
                 current_emotion = 'slow'
             elif any(w in tag for w in ['fast', 'tempo:speed-up', 'rushed']):
                 current_emotion = 'fast'
-            elif any(w in tag for w in ['excited', 'bubbly', 'thrilled']):
-                current_emotion = 'excited'
             elif any(w in tag for w in ['mysterious', 'cryptic', 'haunting']):
                 current_emotion = 'mysterious'
+            elif any(w in tag for w in ['normal', 'reset', 'whisper']):
+                current_emotion = 'normal'
         else:
             text = part.strip()
             if text:
@@ -285,7 +289,7 @@ async def process_speech_generation(req: GenerateRequest):
 
     try:
         # Fast path for single standard segment with no emotion modifications
-        if len(segments) == 1 and segments[0]["emotion"] == "normal" and segments[0].get("pause_before_ms", 0) == 0:
+        if len(segments) == 1 and segments[0].get("type") == "speech" and segments[0].get("emotion") == "normal" and segments[0].get("pause_before_ms", 0) == 0:
             sound = await synthesize_single_segment(
                 text=segments[0]["text"],
                 voice=safe_voice,
@@ -300,10 +304,8 @@ async def process_speech_generation(req: GenerateRequest):
                 pause_before = seg.get("pause_before_ms", 0)
                 if pause_before > 0:
                     master += AudioSegment.silent(duration=pause_before)
-                elif len(master) > 0 and seg.get("emotion") == "whisper":
-                    master += AudioSegment.silent(duration=200)
 
-                # 1. Handle Authentic Human Vocal Sound Effects (cough, laugh, gasp, sigh, etc.)
+                # 1. Handle Authentic Human Vocal Sound Effects (laugh, cry, cough, gasp, sigh, etc.)
                 if seg.get("type") == "sfx":
                     sfx_filename = seg.get("sfx_file", "cough.mp3")
                     sfx_path = os.path.join(SFX_DIR, sfx_filename)
@@ -317,7 +319,7 @@ async def process_speech_generation(req: GenerateRequest):
                         master += AudioSegment.silent(duration=seg["pause_after_ms"])
                     continue
 
-                # 2. Handle Speech Synthesis with Prosody and Acoustic DSP
+                # 2. Handle Speech Synthesis with Prosody and Acoustic Emotion
                 emo = seg.get("emotion", "normal")
                 txt = seg.get("text", "")
                 if not txt.strip():
@@ -328,14 +330,7 @@ async def process_speech_generation(req: GenerateRequest):
                 vol = req.volume
                 dsp = None
 
-                if emo == "whisper":
-                    # Soft intimate cadence without any dish antenna static or noise
-                    txt = txt.strip()
-                    rate = adjust_pct(req.rate, -10)
-                    pitch = adjust_hz(req.pitch, -8)
-                    vol = adjust_pct(req.volume, -20)
-                    dsp = None
-                elif emo == "shout":
+                if emo == "shout":
                     txt = txt.upper() + ("!" if not txt.endswith("!") else "")
                     rate = adjust_pct(req.rate, 15)
                     pitch = adjust_hz(req.pitch, 28)
@@ -360,12 +355,6 @@ async def process_speech_generation(req: GenerateRequest):
                     txt = " ".join(words)
                     rate = adjust_pct(req.rate, 20)
                     pitch = adjust_hz(req.pitch, 16)
-                elif emo == "robot":
-                    rate = adjust_pct(req.rate, -10)
-                    pitch = adjust_hz(req.pitch, -6)
-                    dsp = "robot"
-                elif emo == "radio":
-                    dsp = "radio"
                 elif emo == "slow":
                     rate = adjust_pct(req.rate, -30)
                 elif emo == "fast":

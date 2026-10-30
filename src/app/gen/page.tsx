@@ -232,7 +232,7 @@ export default function GenStudioPage() {
       return;
     }
 
-    // Priority 2: In-browser Web Audio DSP engine (handles real SFX like cough/laugh & acoustic whisper filtering)
+    // Priority 2: In-browser Web Audio DSP engine (handles real SFX like haha, cry, cough, laugh & acoustic emotional prosody)
     try {
       const blob = await synthesizeWithWebAudioDSP(
         text,
@@ -429,15 +429,16 @@ export default function GenStudioPage() {
                 Quick Tags:
               </span>
               {[
-                { tag: '[aha]', label: 'Aha!' },
+                { tag: '[haha]', label: 'Haha' },
+                { tag: '[cry]', label: 'Cry' },
                 { tag: '[laugh]', label: 'Laugh' },
-                { tag: '[whisper]', label: 'Whisper' },
                 { tag: '[cough]', label: 'Cough' },
-                { tag: '[gasp]', label: 'Gasp' },
                 { tag: '[sigh]', label: 'Sigh' },
-                { tag: '[pause 0.5s]', label: 'Pause 0.5s' },
+                { tag: '[gasp]', label: 'Gasp' },
+                { tag: '[yawn]', label: 'Yawn' },
+                { tag: '[sneeze]', label: 'Sneeze' },
                 { tag: '[shout]', label: 'Shout' },
-                { tag: '[sad]', label: 'Sad' },
+                { tag: '[pause 0.5s]', label: 'Pause 0.5s' },
               ].map((chip) => (
                 <button
                   key={chip.tag}
@@ -461,7 +462,7 @@ export default function GenStudioPage() {
                 ref={textareaRef}
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Enter text or paste a script. Type [whisper], [laugh], [cough], or [pause 0.5s] to inject acoustic modulations..."
+                placeholder="Enter text or paste a script. Type [haha], [cry], [cough], [gasp], or [pause 0.5s] to inject authentic vocal emotions..."
                 className="h-full min-h-[280px] w-full resize-none bg-studio-white font-sans text-sm leading-relaxed text-studio-obsidian placeholder-studio-muted outline-none focus:ring-0"
                 style={{ caretColor: '#09090B' }}
               />

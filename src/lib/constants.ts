@@ -313,10 +313,9 @@ const BASE_EMOTION_PATTERNS = [
   { prefix: 'shiver', variations: ['cold', 'tremble', 'creepy', 'spine', 'subtle'], cat: 'Breathing & Human' as const, desc: 'Vocal cord oscillation under chill' },
 
   // Category 3: Emotional States & Inflections (220 variations)
-  { prefix: 'whisper', variations: ['intimate', 'secretive', 'urgent', 'spooky', 'gentle', 'pillow', 'aspiration', 'faint', 'shadow', 'conspiratorial'], cat: 'Emotional States' as const, desc: 'De-voiced aspiration with increased proximity' },
+  { prefix: 'crying', variations: ['whimper', 'sobbing', 'sniffle', 'breakdown', 'muffled-tears', 'restrained', 'quiet', 'heartbroken', 'tearful'], cat: 'Emotional States' as const, desc: 'Authentic tearful weeping and heartbroken vocal cadence' },
   { prefix: 'shout', variations: ['warning', 'battle', 'commanding', 'distant', 'furious', 'celebratory', 'echoing'], cat: 'Emotional States' as const, desc: 'High acoustic pressure with formants boost' },
   { prefix: 'sad', variations: ['tearful', 'grieving', 'cracked-voice', 'resigned', 'heartbroken', 'gloomy', 'somber', 'melancholic'], cat: 'Emotional States' as const, desc: 'Downward pitch contour with trembling vibrato' },
-  { prefix: 'crying', variations: ['whimper', 'sobbing', 'sniffle', 'breakdown', 'muffled-tears', 'restrained', 'quiet'], cat: 'Emotional States' as const, desc: 'Glottal interruption with breath breaks' },
   { prefix: 'angry', variations: ['seething', 'growl', 'gritted-teeth', 'explosive', 'commanding', 'bitter', 'snarl', 'furious'], cat: 'Emotional States' as const, desc: 'Compressed dynamic range and aggressive transients' },
   { prefix: 'nervous', variations: ['stammer', 'shaky', 'fast', 'hesitant', 'stammering-pause', 'timid', 'fidgety'], cat: 'Emotional States' as const, desc: 'Micro-pitch drift and fast pace' },
   { prefix: 'sarcastic', variations: ['deadpan', 'mocking', 'dry', 'condescending', 'drawn-out', 'ironic', 'smug'], cat: 'Emotional States' as const, desc: 'Elongated vowels and flat cadence' },
@@ -365,6 +364,8 @@ export const ALL_EMOTION_TAGS: EmotionTag[] = (() => {
   // Add foundational standalone primary chips for immediate 1-click access
   const primaryChips: { code: string; label: string; cat: EmotionTag['category']; desc: string }[] = [
     { code: '[aha]', label: 'Aha! (Discovery)', cat: 'Reactions', desc: 'Sudden lightbulb inspiration sound' },
+    { code: '[haha]', label: 'Haha (Joyful)', cat: 'Reactions', desc: 'Hearty authentic human laughter' },
+    { code: '[cry]', label: 'Cry (Sorrow)', cat: 'Emotional States', desc: 'Authentic tearful weeping and heartbroken inflection' },
     { code: '[laugh]', label: 'Laugh (Warm)', cat: 'Reactions', desc: 'Natural genuine laughter chuckle' },
     { code: '[giggle]', label: 'Giggle (Playful)', cat: 'Reactions', desc: 'Light amused vocal giggle' },
     { code: '[snicker]', label: 'Snicker (Sly)', cat: 'Reactions', desc: 'Quiet suppressed amusement' },
@@ -373,18 +374,15 @@ export const ALL_EMOTION_TAGS: EmotionTag[] = (() => {
     { code: '[sigh]', label: 'Sigh (Deep)', cat: 'Breathing & Human', desc: 'Heavy emotional breath release' },
     { code: '[gasp]', label: 'Gasp (Surprise)', cat: 'Breathing & Human', desc: 'Sudden intake of breath' },
     { code: '[yawn]', label: 'Yawn (Drowsy)', cat: 'Breathing & Human', desc: 'Sleepy drawn-out vocal yawn' },
-    { code: '[whisper]', label: 'Whisper (Soft)', cat: 'Emotional States', desc: 'Intimate de-voiced whisper effect' },
+    { code: '[sneeze]', label: 'Sneeze (Natural)', cat: 'Breathing & Human', desc: 'Sudden natural vocal sneeze' },
     { code: '[shout]', label: 'Shout (Urgent)', cat: 'Emotional States', desc: 'Projected loud vocal emphasis' },
     { code: '[sad]', label: 'Sad (Melancholic)', cat: 'Emotional States', desc: 'Lowered mournful pitch drop' },
-    { code: '[crying]', label: 'Crying (Sob)', cat: 'Emotional States', desc: 'Tearful glottal tremor' },
     { code: '[nervous]', label: 'Nervous (Shaky)', cat: 'Emotional States', desc: 'Trembling pitch with micro hesitations' },
     { code: '[sarcastic]', label: 'Sarcastic (Dry)', cat: 'Emotional States', desc: 'Drawn-out ironic cadence' },
     { code: '[excited]', label: 'Excited (High)', cat: 'Emotional States', desc: 'Energetic upbeat vocal rhythm' },
     { code: '[pause 0.5s]', label: 'Pause (0.5s)', cat: 'Acoustic Timing', desc: 'Natural half-second breathing space' },
     { code: '[pause 1.0s]', label: 'Pause (1.0s)', cat: 'Acoustic Timing', desc: 'Dramatic full-second silence' },
-    { code: '[applause]', label: 'Applause (Stem)', cat: 'Foley & Stems', desc: 'Ambient crowd clapping stem' },
-    { code: '[robot]', label: 'Robot (DSP)', cat: 'Voice Modulation', desc: 'Vocoded metallic robotic tone' },
-    { code: '[radio]', label: 'Walkie Radio (DSP)', cat: 'Voice Modulation', desc: 'Narrow bandpass tactical radio effect' }
+    { code: '[applause]', label: 'Applause (Stem)', cat: 'Foley & Stems', desc: 'Ambient crowd clapping stem' }
   ];
 
   for (const chip of primaryChips) {
@@ -399,7 +397,7 @@ export const ALL_EMOTION_TAGS: EmotionTag[] = (() => {
 
   // Expand with systematic pitch and phoneme acoustic tags to exceed 1,000 distinct items
   const phonemes = ['ah', 'eh', 'ee', 'oh', 'oo', 'mm', 'uh', 'sh', 'psst', 'whoa', 'hmm', 'tsk', 'brrr', 'sigh-extended', 'groan'];
-  const intensities = ['whisper-subtle', 'mild', 'distinct', 'pronounced', 'intense', 'extreme', 'layered'];
+  const intensities = ['subtle', 'mild', 'distinct', 'pronounced', 'intense', 'extreme', 'layered'];
   const timbres = ['dark', 'bright', 'nasal', 'chest', 'falsetto', 'gravel', 'breathy'];
 
   for (const ph of phonemes) {
@@ -434,7 +432,7 @@ export const SCRIPT_PRESETS: ScriptPreset[] = [
     id: 'preset-mystery',
     title: 'Narrate a mystery',
     category: 'Fiction',
-    text: 'The rain hammered against the stained glass. [gasp] A shadow detached itself from the doorway... [whisper] footsteps approaching down the hollow corridor.',
+    text: 'The rain hammered against the stained glass. [gasp] A shadow detached itself from the doorway... [pause 0.8s] footsteps approaching down the hollow corridor.',
     suggestedVoiceId: 'en-GB-RyanNeural'
   },
   {

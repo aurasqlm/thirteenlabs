@@ -124,7 +124,7 @@ export default function HelpDirectoryPage() {
                   Vocal Extensions & Emotion Syntax
                 </h2>
                 <p className="text-xs text-studio-muted">
-                  Insert these acoustic tags anywhere in your text to trigger natural human laughter, coughing, whispering, and pauses.
+                  Insert these acoustic tags anywhere in your text to trigger natural human laughter, crying, coughing, and pauses.
                 </p>
               </div>
 
@@ -147,7 +147,7 @@ export default function HelpDirectoryPage() {
                 How Emotion Ingestion Works
               </h3>
               <p className="mt-1 text-xs text-studio-subtle leading-relaxed">
-                ThirteenLabs parses bracketed tags like <code className="rounded bg-studio-canvas px-1.5 py-0.5 font-mono text-[11px] text-studio-obsidian font-semibold">[aha]</code>, <code className="rounded bg-studio-canvas px-1.5 py-0.5 font-mono text-[11px] text-studio-obsidian font-semibold">[laugh]</code>, <code className="rounded bg-studio-canvas px-1.5 py-0.5 font-mono text-[11px] text-studio-obsidian font-semibold">[whisper]</code>, or <code className="rounded bg-studio-canvas px-1.5 py-0.5 font-mono text-[11px] text-studio-obsidian font-semibold">[pause 0.5s]</code> and translates them into SSML prosody modulations or time-aligned acoustic stems in the audio stream.
+                ThirteenLabs parses bracketed tags like <code className="rounded bg-studio-canvas px-1.5 py-0.5 font-mono text-[11px] text-studio-obsidian font-semibold">[aha]</code>, <code className="rounded bg-studio-canvas px-1.5 py-0.5 font-mono text-[11px] text-studio-obsidian font-semibold">[haha]</code>, <code className="rounded bg-studio-canvas px-1.5 py-0.5 font-mono text-[11px] text-studio-obsidian font-semibold">[cry]</code>, or <code className="rounded bg-studio-canvas px-1.5 py-0.5 font-mono text-[11px] text-studio-obsidian font-semibold">[pause 0.5s]</code> and translates them into SSML prosody modulations or time-aligned acoustic stems in the audio stream.
               </p>
             </div>
 
