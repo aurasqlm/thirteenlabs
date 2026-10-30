@@ -64,22 +64,6 @@ The FastAPI server will be available at [http://localhost:8000](http://localhost
 
 ---
 
-## ☁️ Cloudflare Wrangler Deployment
-
-Deploy to Cloudflare Pages bound to `thirteenlabs.bond`:
-
-```bash
-# Authenticate with Cloudflare
-npx wrangler login
-
-# Build Next.js project
-npm run build
-
-# Deploy via Wrangler
-npx wrangler pages deploy .next/standalone --project-name thirteenlabs
-```
-
----
 
 ## ⌨️ Master Keyboard Shortcuts
 
